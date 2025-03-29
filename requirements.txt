@@ -1,9 +1,34 @@
+# Core ML & Data
 numpy
 pandas
-requests
 scikit-learn
-openai
-matplotlib
-tensorflow
 xgboost
-streamlitplotly
+tensorflow
+torch
+lightning
+optuna
+
+# Visualization & UI
+streamlit
+plotly
+matplotlib
+pygments
+rich
+
+# Time Series & NLP
+tsfresh
+pytrends
+snscrape
+transformers
+shap
+
+# APIs & Integration
+requests
+openai
+fastapi
+uvicorn
+joblib
+prefect
+
+# Optional (for inference or scheduling)
+pydantic
