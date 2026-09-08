@@ -72,7 +72,7 @@ class TTMHFModelAdapter:
             "per_device_train_batch_size": self.batch_size,
             "per_device_eval_batch_size": self.batch_size,
             "report_to": [],
-            "remove_unused_columns": False,
+            "remove_unused_columns": True,
             "save_strategy": "no",
             "logging_strategy": "no",
             "fp16": self.precision == "fp16",
