@@ -77,5 +77,45 @@ def download_models_command(
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
 
+@app.command("train-ttm")
+def train_ttm_command(
+    train_parquet: Path = typer.Option(..., "--train-parquet", exists=True, dir_okay=False, readable=True),
+    validation_parquet: Path = typer.Option(..., "--validation-parquet", exists=True, dir_okay=False, readable=True),
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    context_length: int = typer.Option(512, "--context-length", min=2),
+    prediction_length: int = typer.Option(96, "--prediction-length", min=1),
+    epochs: int = typer.Option(1, "--epochs", min=1),
+    learning_rate: float = typer.Option(1e-4, "--learning-rate", min=1e-12),
+) -> None:
+    """Fine-tune IBM TTM locally on explicit chronological Parquet splits."""
+    import pandas as pd
+
+    from heavy_lab.training.launch import run_ttm_training
+
+    train_frame = pd.read_parquet(train_parquet)
+    validation_frame = pd.read_parquet(validation_parquet)
+    result = run_ttm_training(
+        root=root,
+        train_frame=train_frame,
+        validation_frame=validation_frame,
+        context_length=context_length,
+        prediction_length=prediction_length,
+        epochs=epochs,
+        learning_rate=learning_rate,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "status": result.status,
+                "checkpoint": result.checkpoint,
+                "metrics": result.metrics,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
 if __name__ == "__main__":
     app()
