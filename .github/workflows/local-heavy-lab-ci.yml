@@ -20,3 +20,15 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Run tests
         run: python -m pytest -q
+      - name: Hardware doctor smoke
+        run: lab doctor --json
+      - name: Downloader CLI smoke
+        run: lab download-models --help
+      - name: Torch resolver dry run
+        run: python scripts/install_torch.py --dry-run
+      - name: Verify no live broker surface in package
+        run: |
+          if grep -RniE 'alpaca|interactive.?brokers|tradier|broker_api_key|order_endpoint|live_trading' src/heavy_lab; then
+            echo 'Forbidden live broker surface found in training package.'
+            exit 1
+          fi
