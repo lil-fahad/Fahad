@@ -34,65 +34,77 @@ class Chronos2Trainer(TrainerAdapter):
         if preflight.max_micro_batch_size <= 0:
             raise RuntimeError(f"Chronos-2 memory preflight rejected training: {preflight.reason}")
 
-        gradient_checkpointing = not preflight.safe_full_finetune
         self._datasets[run.run_id] = {
-            "train": dataset["train"],
-            "validation": dataset["validation"],
+            "train": list(dataset["train"]),
+            "validation": list(dataset["validation"]),
         }
         return TrainPlan(
             run_id=run.run_id,
             model_kind=self.kind,
             config={
                 "hardware": dict(hardware),
-                "epochs": int(epochs),
+                "num_steps": int(epochs),
                 "learning_rate": float(learning_rate),
-                "gradient_checkpointing": gradient_checkpointing,
                 "micro_batch_size": int(preflight.max_micro_batch_size),
                 "preflight_reason": preflight.reason,
-                "mode": "native-full" if preflight.safe_full_finetune else "native-low-vram",
+                "finetune_mode": "full" if preflight.safe_full_finetune else "lora",
             },
             checkpoint_dir=Path(output_root) / run.run_id / "checkpoint",
         )
+
+    @staticmethod
+    def _prepare_inputs(windows: list[dict[str, Any]]) -> tuple[list[list[float]], int]:
+        if not windows:
+            raise ValueError("Chronos-2 split is empty")
+        prediction_lengths = {len(window.get("target", [])) for window in windows}
+        if 0 in prediction_lengths or len(prediction_lengths) != 1:
+            raise ValueError("Chronos-2 targets must be non-empty and share one prediction length")
+        prediction_length = prediction_lengths.pop()
+        inputs: list[list[float]] = []
+        for window in windows:
+            if "context" not in window or "target" not in window:
+                raise ValueError("Chronos-2 windows require context and target")
+            context = [float(value) for value in window["context"]]
+            target = [float(value) for value in window["target"]]
+            if not context:
+                raise ValueError("Chronos-2 context must be non-empty")
+            inputs.append(context + target)
+        return inputs, prediction_length
 
     def train(self, plan: TrainPlan) -> TrainResult:
         dataset = self._datasets.get(plan.run_id)
         if dataset is None:
             raise RuntimeError("Chronos-2 training dataset is not attached to this run")
 
-        validation = dataset["validation"]
-        baseline_loss = float(self.model.evaluate(validation))
-        last_train_loss: float | None = None
-        for _ in range(int(plan.config["epochs"])):
-            for window in dataset["train"]:
-                if "context" not in window or "target" not in window:
-                    raise ValueError("Chronos-2 windows require context and target")
-                last_train_loss = float(
-                    self.model.train_step(
-                        context=window["context"],
-                        target=window["target"],
-                        learning_rate=float(plan.config["learning_rate"]),
-                        gradient_checkpointing=bool(plan.config["gradient_checkpointing"]),
-                    )
-                )
+        train_inputs, prediction_length = self._prepare_inputs(dataset["train"])
+        validation_inputs, validation_prediction_length = self._prepare_inputs(dataset["validation"])
+        if validation_prediction_length != prediction_length:
+            raise ValueError("Chronos-2 train and validation prediction lengths must match")
 
-        finetuned_loss = float(self.model.evaluate(validation))
         plan.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self.model.save_pretrained(plan.checkpoint_dir / "model")
+        trainer_output = plan.checkpoint_dir / "trainer"
+        finetuned = self.model.fit(
+            train_inputs,
+            prediction_length=prediction_length,
+            validation_inputs=validation_inputs,
+            finetune_mode=str(plan.config["finetune_mode"]),
+            learning_rate=float(plan.config["learning_rate"]),
+            num_steps=int(plan.config["num_steps"]),
+            batch_size=int(plan.config["micro_batch_size"]),
+            output_dir=trainer_output,
+            finetuned_ckpt_name="native-fit",
+        )
+        model_dir = plan.checkpoint_dir / "model"
+        finetuned.save_pretrained(model_dir)
         (plan.checkpoint_dir / "checkpoint.ok").write_text("ok", encoding="utf-8")
         self.registry.mark_checkpoint(plan.run_id, plan.checkpoint_dir)
         self.registry.set_status(plan.run_id, "COMPLETED")
 
-        metrics = {
-            "baseline_loss": baseline_loss,
-            "finetuned_loss": finetuned_loss,
-        }
-        if last_train_loss is not None:
-            metrics["last_train_loss"] = last_train_loss
         return TrainResult(
             run_id=plan.run_id,
             status="COMPLETED",
             checkpoint=str(plan.checkpoint_dir.resolve()),
-            metrics=metrics,
+            metrics={},
         )
 
     def resume(self, run_id: str) -> TrainResult:
