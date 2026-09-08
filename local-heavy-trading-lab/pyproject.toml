@@ -32,6 +32,11 @@ ttm-train = [
   "granite-tsfm==0.3.9",
   "accelerate>=1.10,<2",
 ]
+timesfm-train = [
+  "transformers==5.16.1",
+  "peft==0.20.0",
+  "accelerate==1.14.0",
+]
 
 [project.scripts]
 lab = "heavy_lab.cli:app"
