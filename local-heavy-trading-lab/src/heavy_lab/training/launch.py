@@ -52,7 +52,7 @@ def run_ttm_training(
     if not validation_examples:
         raise ValueError("TTM validation split does not contain enough chronological rows")
 
-    spec = MODEL_CATALOG["ttm_r2"]
+    spec = MODEL_CATALOG["ttm"]
     model_path = paths.models_base / spec.local_name
     adapter = adapter_factory(
         model_path=model_path,
