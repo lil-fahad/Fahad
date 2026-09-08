@@ -1,0 +1,29 @@
+name: Runtime Checksum Diagnosis
+
+on:
+  push:
+    branches: [runtime-checksum-diagnosis]
+    paths:
+      - '.github/workflows/runtime-checksum-diagnosis.yml'
+      - 'telegram-options-ai-v6/**'
+  workflow_dispatch:
+
+jobs:
+  checksum:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce Docker checksum gate
+        working-directory: telegram-options-ai-v6
+        shell: bash
+        run: |
+          set +e
+          sha256sum --check runtime.sha256
+          rc=$?
+          echo "CHECKSUM_EXIT=$rc"
+          echo "CURRENT_SHA256_BEGIN"
+          sha256sum telegram_bridge/model_ensemble.py telegram_bridge/options_paper.py
+          echo "CURRENT_SHA256_END"
+          exit $rc
