@@ -48,6 +48,7 @@ def test_chronos2_uses_native_fit_with_separate_validation(tmp_path: Path):
     assert call["num_steps"] == 2
     assert call["batch_size"] == 1
     assert call["learning_rate"] == 1e-4
+    assert call["finetune_mode"] == "lora"
     assert result.status == "COMPLETED"
     assert Path(result.checkpoint, "model", "chronos.txt").is_file()
     assert Path(result.checkpoint, "checkpoint.ok").is_file()
