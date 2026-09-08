@@ -1,0 +1,16 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+models/
+checkpoints/
+data/raw/
+data/canonical/
+data/features/
+data/splits/
+artifacts/
+runs/
+*.sqlite3
+*.db
