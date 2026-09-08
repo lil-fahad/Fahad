@@ -28,6 +28,10 @@ eval = [
   "scipy>=1.14,<2",
   "matplotlib>=3.9,<4",
 ]
+ttm-train = [
+  "granite-tsfm==0.3.9",
+  "accelerate>=1.10,<2",
+]
 
 [project.scripts]
 lab = "heavy_lab.cli:app"
