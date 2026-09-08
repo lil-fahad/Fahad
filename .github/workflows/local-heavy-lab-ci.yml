@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install package
-        run: python -m pip install -e '.[dev]'
+        run: python -m pip install -e '.[dev,data,eval]'
       - name: Run tests
         run: python -m pytest -q
       - name: Hardware doctor smoke
