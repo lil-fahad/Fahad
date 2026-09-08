@@ -59,9 +59,68 @@ def test_shadow_model_signal_is_persisted_but_does_not_replace_technical_trade(t
 
 
 def test_chronos_adapter_uses_tensor_native_quantile_api(tmp_path):
-    import torch
-
     from telegram_bridge.model_ensemble import Chronos2Adapter
+
+    class FakeNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeSeries:
+        def __init__(self, values):
+            self.values = list(values)
+
+        def __len__(self):
+            return len(self.values)
+
+    class FakeScalar:
+        def __init__(self, value):
+            self.value = float(value)
+
+        def item(self):
+            return self.value
+
+    class FakeVector:
+        def __init__(self, values):
+            self.values = list(values)
+
+        def detach(self):
+            return self
+
+        def float(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def flatten(self):
+            return self
+
+        def numel(self):
+            return len(self.values)
+
+        def __getitem__(self, index):
+            return FakeScalar(self.values[index])
+
+    class FakeMatrix:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def __getitem__(self, index):
+            return FakeVector(self.rows[index])
+
+    class FakeTorch:
+        float32 = object()
+
+        @staticmethod
+        def tensor(values, dtype=None):
+            return FakeSeries(values)
+
+        @staticmethod
+        def no_grad():
+            return FakeNoGrad()
 
     class FakePipeline:
         def __init__(self):
@@ -76,13 +135,12 @@ def test_chronos_adapter_uses_tensor_native_quantile_api(tmp_path):
                     "batch_size": batch_size,
                 }
             )
-            quantiles = torch.zeros((1, prediction_length, len(quantile_levels)), dtype=torch.float32)
-            mean = torch.tensor([[100.1, 100.2, 100.3, 100.4, 100.5, 100.6]], dtype=torch.float32)
-            return quantiles, mean
+            mean = FakeMatrix([[100.1, 100.2, 100.3, 100.4, 100.5, 100.6]])
+            return None, mean
 
     adapter = Chronos2Adapter(tmp_path / "chronos", "cpu")
     adapter.pipeline = FakePipeline()
-    adapter.torch = torch
+    adapter.torch = FakeTorch()
 
     vote = adapter.vote({
         "symbol": "SPY",
