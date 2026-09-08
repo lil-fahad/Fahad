@@ -12,6 +12,21 @@ from heavy_lab.paths import LabPaths
 app = typer.Typer(no_args_is_help=True, help="Local Heavy Trading Lab")
 
 
+def _echo_train_result(result) -> None:
+    typer.echo(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "status": result.status,
+                "checkpoint": result.checkpoint,
+                "metrics": result.metrics,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
 @app.command()
 def version() -> None:
     """Print the local lab version."""
@@ -103,18 +118,54 @@ def train_ttm_command(
         epochs=epochs,
         learning_rate=learning_rate,
     )
-    typer.echo(
-        json.dumps(
-            {
-                "run_id": result.run_id,
-                "status": result.status,
-                "checkpoint": result.checkpoint,
-                "metrics": result.metrics,
-            },
-            indent=2,
-            sort_keys=True,
-        )
+    _echo_train_result(result)
+
+
+@app.command("train-timesfm25")
+def train_timesfm25_command(
+    train_parquet: Path = typer.Option(..., "--train-parquet", exists=True, dir_okay=False, readable=True),
+    validation_parquet: Path = typer.Option(..., "--validation-parquet", exists=True, dir_okay=False, readable=True),
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    context_length: int = typer.Option(512, "--context-length", min=2),
+    prediction_length: int = typer.Option(96, "--prediction-length", min=1),
+    epochs: int = typer.Option(1, "--epochs", min=1),
+    learning_rate: float = typer.Option(1e-4, "--learning-rate", min=1e-12),
+    micro_batch_size: int = typer.Option(1, "--micro-batch-size", min=1),
+) -> None:
+    """Fine-tune TimesFM 2.5 locally; 8 GB-class GPUs use LoRA by default."""
+    import pandas as pd
+
+    from heavy_lab.hardware import detect_hardware
+    from heavy_lab.training.base import MemoryProbeResult
+    from heavy_lab.training.launch import run_timesfm_training
+
+    train_frame = pd.read_parquet(train_parquet)
+    validation_frame = pd.read_parquet(validation_parquet)
+    hardware = detect_hardware(Path(root))
+    vram_gb = float(hardware.vram_gb or 0.0)
+    safe_full = bool(hardware.cuda and vram_gb >= 24.0)
+    preflight = MemoryProbeResult(
+        safe_full_finetune=safe_full,
+        max_micro_batch_size=int(micro_batch_size),
+        reason=(
+            "hardware full-finetune gate passed; run a memory smoke test before increasing batch size"
+            if safe_full
+            else f"TimesFM full fine-tuning requires at least 24 GB VRAM; detected {vram_gb:g} GB, using LoRA"
+        ),
+        peak_memory_gb=None,
     )
+    result = run_timesfm_training(
+        root=root,
+        train_frame=train_frame,
+        validation_frame=validation_frame,
+        context_length=context_length,
+        prediction_length=prediction_length,
+        epochs=epochs,
+        learning_rate=learning_rate,
+        hardware=hardware,
+        preflight=preflight,
+    )
+    _echo_train_result(result)
 
 
 if __name__ == "__main__":
