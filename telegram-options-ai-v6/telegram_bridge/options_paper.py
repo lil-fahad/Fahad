@@ -358,7 +358,13 @@ class OptionsPaperEngine:
             try:
                 ensemble = await asyncio.to_thread(self.model_ensemble.evaluate, snapshot, kind, strength)
                 self._record_model_signal(symbol, slot, ensemble)
-                kind, strength, signal_reason = ensemble.kind, ensemble.confidence, ensemble.reason
+                if not bool(getattr(self.model_ensemble, "shadow_mode", False)):
+                    kind, strength, signal_reason = ensemble.kind, ensemble.confidence, ensemble.reason
+                else:
+                    signal_reason = (
+                        f"{signal_reason}; AI shadow={ensemble.kind} "
+                        f"score={ensemble.score:.3f} confidence={ensemble.confidence:.3f}"
+                    )
             except Exception as exc:
                 self.last_error = f"Options model ensemble failed: {str(exc)[:160]}"
         now = datetime.fromtimestamp(snapshot.get("timestamp", time.time()), NY)
