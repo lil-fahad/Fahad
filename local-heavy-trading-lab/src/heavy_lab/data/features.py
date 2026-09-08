@@ -22,5 +22,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         lambda s: s.pct_change(fill_method=None).rolling(5, min_periods=5).std()
     )
 
+    feature_cols = [column for column in out.columns if column.startswith("feat_")]
+    first_rows = out.groupby("symbol", sort=False).cumcount().eq(0)
+    out.loc[first_rows, feature_cols] = np.nan
+
     # No backfill or centered windows: every feature at row t uses only rows <= t.
     return out
