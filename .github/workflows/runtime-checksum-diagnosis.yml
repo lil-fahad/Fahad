@@ -15,15 +15,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Reproduce Docker checksum gate
+      - name: Verify runtime checksum gate
         working-directory: telegram-options-ai-v6
         shell: bash
         run: |
-          set +e
           sha256sum --check runtime.sha256
-          rc=$?
-          echo "CHECKSUM_EXIT=$rc"
-          echo "CURRENT_SHA256_BEGIN"
-          sha256sum telegram_bridge/model_ensemble.py telegram_bridge/options_paper.py tests/test_model_shadow_gate.py
-          echo "CURRENT_SHA256_END"
-          exit $rc
+          echo "CHECKSUM_EXIT=0"
+      - name: Build production Docker image
+        run: docker build --progress=plain -t fahad-options-ai-v6-check ./telegram-options-ai-v6
