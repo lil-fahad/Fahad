@@ -1,0 +1,53 @@
+name: Heavy Model Market Benchmark
+
+on:
+  push:
+    branches: [heavy-model-actions-run]
+    paths:
+      - '.github/workflows/heavy-model-benchmark.yml'
+      - 'benchmarks/**'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+      - name: Install model dependencies
+        run: |
+          python -m pip install \
+            'transformers==5.16.1' \
+            'chronos-forecasting==2.3.1' \
+            'accelerate>=1.10,<2' \
+            'pandas>=2.2,<3' \
+            'numpy>=2.0,<3' \
+            'httpx>=0.27,<1' \
+            'python-dateutil>=2.9' \
+            'pyarrow>=16' \
+            'safetensors>=0.4'
+      - name: Run strict walk-forward benchmark
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          python benchmarks/heavy_models.py | tee benchmark.log
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heavy-model-benchmark-results
+          path: |
+            benchmark_results.json
+            benchmark_summary.md
+            benchmark.log
+          if-no-files-found: warn
