@@ -10,12 +10,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.getenv("PORT", "8080"))
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+OWNER_CHAT_ID = os.getenv("TELEGRAM_OWNER_CHAT_ID", "").strip()
 
 
 def _json_url(url: str, timeout: int = 10) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": "FahadRailwaySmoke/3"})
+    req = urllib.request.Request(url, headers={"User-Agent": "FahadRailwaySmoke/4"})
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def send_owner_test_message(token: str, chat_id: int) -> dict:
+    text = "Railway connection test successful ✅"
+    query = urllib.parse.urlencode({"chat_id": chat_id, "text": text})
+    payload = _json_url(f"https://api.telegram.org/bot{token}/sendMessage?{query}")
+    message = payload.get("result") or {}
+    return {"ok": bool(payload.get("ok")), "message_id": message.get("message_id")}
 
 
 def check_yahoo() -> dict:
@@ -93,6 +102,14 @@ def poll_telegram_forever() -> None:
 
 TELEGRAM = check_telegram()
 print("telegram discovery:", json.dumps(TELEGRAM, ensure_ascii=True), flush=True)
+if TOKEN and OWNER_CHAT_ID:
+    try:
+        TEST_SEND = send_owner_test_message(TOKEN, int(OWNER_CHAT_ID))
+    except Exception as exc:
+        TEST_SEND = {"ok": False, "error": type(exc).__name__}
+    print("TELEGRAM_TEST_SEND=" + json.dumps(TEST_SEND, ensure_ascii=True), flush=True)
+else:
+    TEST_SEND = {"ok": False, "error": "owner_not_configured"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -107,9 +124,10 @@ class Handler(BaseHTTPRequestHandler):
             "python_ok": True,
             "market_feed": market,
             "telegram": {k: v for k, v in TELEGRAM.items() if k != "chats"},
+            "test_send": TEST_SEND,
         }
         data = json.dumps(payload).encode()
-        ok = market.get("ok") and TELEGRAM.get("ok")
+        ok = market.get("ok") and TELEGRAM.get("ok") and TEST_SEND.get("ok")
         self.send_response(200 if ok else 503)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
