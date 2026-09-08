@@ -24,6 +24,6 @@ jobs:
           rc=$?
           echo "CHECKSUM_EXIT=$rc"
           echo "CURRENT_SHA256_BEGIN"
-          sha256sum telegram_bridge/model_ensemble.py telegram_bridge/options_paper.py
+          sha256sum telegram_bridge/model_ensemble.py telegram_bridge/options_paper.py tests/test_model_shadow_gate.py
           echo "CURRENT_SHA256_END"
           exit $rc
