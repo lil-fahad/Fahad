@@ -5,11 +5,31 @@ from pathlib import Path
 import gc
 
 
+# Benchmark-informed priors from the isolated 5-minute Nasdaq walk-forward run.
+# Heavy models are shadow-only by default, so these weights are not allowed to
+# alter PAPER trade decisions until shadow mode is deliberately promoted.
 WEIGHTS = {
-    "technical": 0.20,
-    "chronos2": 0.35,
-    "timesfm2_5": 0.30,
-    "finbert": 0.15,
+    "technical": 0.35,
+    "chronos2": 0.20,
+    "timesfm2_5": 0.35,
+    "finbert": 0.10,
+}
+
+BENCHMARK_PRIORS = {
+    "timesfm2_5": {
+        "spy_skill_vs_last": 0.20035273058870362,
+        "spx_skill_vs_last": 0.23264975083769746,
+        "spy_direction_accuracy": 8 / 12,
+        "spx_direction_accuracy": 8 / 12,
+        "samples_per_symbol": 12,
+    },
+    "chronos2": {
+        "spy_skill_vs_last": 0.15446423546532173,
+        "spx_skill_vs_last": 0.144919281527071,
+        "spy_direction_accuracy": 7 / 12,
+        "spx_direction_accuracy": 7 / 12,
+        "samples_per_symbol": 12,
+    },
 }
 
 
@@ -126,7 +146,7 @@ class Chronos2Adapter:
     def __init__(self, cache_dir: Path, device: str):
         self.cache_dir, self.device = Path(cache_dir), _resolve_device(device)
         self.pipeline = None
-        self.pd = None
+        self.torch = None
 
     @property
     def loaded(self) -> bool:
@@ -134,18 +154,18 @@ class Chronos2Adapter:
 
     def release(self):
         self.pipeline = None
-        self.pd = None
+        self.torch = None
         _release_runtime(self.device)
 
     def warmup(self):
         if self.pipeline is None:
-            import pandas as pd
+            import torch
             from chronos import Chronos2Pipeline
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             self.pipeline = Chronos2Pipeline.from_pretrained(
                 self.repo_id, device_map=self.device, cache_dir=str(self.cache_dir)
             )
-            self.pd = pd
+            self.torch = torch
         return self
 
     def vote(self, snapshot: dict) -> ModelVote | None:
@@ -153,23 +173,19 @@ class Chronos2Adapter:
         if len(closes) < 20:
             return None
         self.warmup()
-        pd = self.pd
-        end = pd.to_datetime(int(snapshot.get("timestamp", 0)), unit="s", utc=True)
-        frame = pd.DataFrame({
-            "item_id": [snapshot.get("symbol", "series")] * len(closes),
-            "timestamp": pd.date_range(end=end, periods=len(closes), freq="5min"),
-            "target": closes,
-        })
-        prediction = self.pipeline.predict_df(
-            frame,
-            prediction_length=6,
-            quantile_levels=[0.1, 0.5, 0.9],
-            id_column="item_id",
-            timestamp_column="timestamp",
-            target="target",
-            freq="5min",
-        )
-        predicted = float(prediction["predictions"].iloc[-1])
+        torch = self.torch
+        series = torch.tensor(closes, dtype=torch.float32)
+        with torch.no_grad():
+            _, mean = self.pipeline.predict_quantiles(
+                inputs=[series],
+                prediction_length=6,
+                quantile_levels=[0.1, 0.5, 0.9],
+                batch_size=1,
+            )
+        values = mean[0].detach().float().cpu().flatten()
+        if values.numel() == 0:
+            return None
+        predicted = float(values[min(5, values.numel() - 1)].item())
         return forecast_vote(self.source, closes[-1], predicted)
 
 
@@ -189,6 +205,7 @@ class TimesFM25Adapter:
 
     def release(self):
         self.model = None
+        self.torch = None
         _release_runtime(self.device)
 
     def warmup(self):
@@ -269,8 +286,9 @@ class FinBERTAdapter:
 
 
 class OptionsModelEnsemble:
-    def __init__(self, adapters=None):
+    def __init__(self, adapters=None, *, shadow_mode: bool = True):
         self.adapters = list(adapters or [])
+        self.shadow_mode = bool(shadow_mode)
         self.last_errors: dict[str, str] = {}
 
     def evaluate(self, snapshot: dict, technical_kind: str, technical_strength: float) -> EnsembleResult:
@@ -318,6 +336,9 @@ class OptionsModelEnsemble:
             "loaded": [getattr(adapter, "source", adapter.__class__.__name__)
                        for adapter in self.adapters if bool(getattr(adapter, "loaded", False))],
             "errors": dict(self.last_errors),
+            "shadow_mode": self.shadow_mode,
+            "mode": "shadow" if self.shadow_mode else "active",
+            "benchmark_priors": dict(BENCHMARK_PRIORS),
         }
 
 
@@ -327,4 +348,4 @@ def build_default_ensemble(cache_dir: Path, device: str = "auto") -> OptionsMode
         Chronos2Adapter(cache_dir / "chronos2", device),
         TimesFM25Adapter(cache_dir / "timesfm2_5", device),
         FinBERTAdapter(cache_dir / "finbert", device),
-    ])
+    ], shadow_mode=True)
