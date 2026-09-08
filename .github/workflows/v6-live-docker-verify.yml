@@ -1,0 +1,22 @@
+name: V6 Live Docker Verify
+
+on:
+  push:
+    branches: [railway-options-ai-v6]
+    paths:
+      - 'telegram-options-ai-v6/**'
+      - '.github/workflows/v6-live-docker-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact live branch runtime integrity
+        working-directory: telegram-options-ai-v6
+        run: sha256sum --check runtime.sha256
+      - name: Build exact production Docker image
+        run: docker build --progress=plain -t fahad-options-ai-v6-live ./telegram-options-ai-v6
