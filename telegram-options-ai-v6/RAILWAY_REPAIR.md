@@ -40,6 +40,9 @@ internal healthcheck Host header; the original MCP host and OAuth checks are
 retained. Startup logs exercise the actual `/optionsstatus` handler, and a
 separate receiver log confirms Telegram polling. The integration test verifies
 the real command queue sends the status reply only to the configured owner.
+During Railway's rolling cutover, a Telegram 409 from the previous container is
+retried within a bounded 60-second startup window. The integration test covers
+that overlap and verifies the owner command is delivered after recovery.
 
 To regenerate the manifest after an intentional source change:
 

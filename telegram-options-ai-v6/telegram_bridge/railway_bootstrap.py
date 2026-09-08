@@ -18,7 +18,7 @@ from .commands import options_command
 from .config import Config, hash_password
 from .server import create_app
 from .storage import Store
-from .telegram import TelegramAPI
+from .telegram import TelegramAPI, TelegramError
 
 
 def _boolean(value: str) -> bool:
@@ -62,12 +62,30 @@ def create_railway_app(config: Config, *, api: TelegramAPI | None = None,
     started_at = time.time()
 
     async def report_receiver():
-        while bridge.last_poll_ok is None and bridge.poll_error is None:
-            await asyncio.sleep(0.2)
-        print('TELEGRAM_RECEIVER=' + json.dumps({
-            'receiving': bridge.last_poll_ok is not None and bridge.poll_error is None,
-            'error': bridge.poll_error,
-        }), flush=True)
+        resumed = None
+        deadline = time.monotonic() + 60
+        conflict = str(TelegramError(409))
+        try:
+            while bridge.last_poll_ok is None or bridge.poll_error:
+                if bridge.poll_error == conflict and time.monotonic() < deadline:
+                    # Bridge.poll deliberately exits on 409. During Railway's
+                    # rolling cutover, the previous container may still be polling.
+                    if resumed is None or resumed.done():
+                        await asyncio.sleep(2)
+                        resumed = asyncio.create_task(bridge.poll())
+                elif bridge.poll_error or time.monotonic() >= deadline:
+                    break
+                await asyncio.sleep(0.2)
+            print('TELEGRAM_RECEIVER=' + json.dumps({
+                'receiving': bridge.last_poll_ok is not None and bridge.poll_error is None,
+                'error': bridge.poll_error,
+            }), flush=True)
+            if resumed is not None and not resumed.done():
+                await resumed
+        finally:
+            if resumed is not None:
+                resumed.cancel()
+                await asyncio.gather(resumed, return_exceptions=True)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -83,7 +101,12 @@ def create_railway_app(config: Config, *, api: TelegramAPI | None = None,
                     'reply': status,
                 }, ensure_ascii=False), flush=True)
                 reporter = asyncio.create_task(report_receiver())
-                yield
+                try:
+                    yield
+                finally:
+                    reporter.cancel()
+                    await asyncio.gather(reporter, return_exceptions=True)
+                    reporter = None
         finally:
             if reporter:
                 reporter.cancel()

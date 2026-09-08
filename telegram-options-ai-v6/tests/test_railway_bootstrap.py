@@ -40,7 +40,8 @@ def test_bootstrap_requires_a_positive_private_owner_chat(tmp_path, owner):
         config_from_environment(environment(tmp_path, TELEGRAM_OWNER_CHAT_ID=owner))
 
 
-def test_railway_health_and_real_command_worker_reply_to_owner_only(tmp_path, capsys):
+@pytest.mark.parametrize('cutover_conflict', [False, True])
+def test_railway_health_and_real_command_worker_reply_to_owner_only(tmp_path, capsys, cutover_conflict):
     from telegram_bridge.railway_bootstrap import config_from_environment, create_railway_app
 
     now = int(time.time())
@@ -52,8 +53,10 @@ def test_railway_health_and_real_command_worker_reply_to_owner_only(tmp_path, ca
         for i, owner in [(1, 123456), (2, 8644335458)]
     ]
     sent = []
+    polls = 0
 
     async def telegram(request):
+        nonlocal polls
         method = request.url.path.rsplit('/', 1)[-1]
         payload = json.loads(request.content)
         if method == 'getMe':
@@ -61,6 +64,10 @@ def test_railway_health_and_real_command_worker_reply_to_owner_only(tmp_path, ca
         elif method == 'getWebhookInfo':
             result = {'url': '', 'has_custom_certificate': False, 'pending_update_count': 0}
         elif method == 'getUpdates':
+            polls += 1
+            if cutover_conflict and polls == 1:
+                return httpx.Response(409, json={'ok': False, 'error_code': 409,
+                                               'description': 'Conflict: another getUpdates request'})
             await asyncio.sleep(0.01)
             result = [u for u in updates if u['update_id'] >= payload['offset']]
         elif method == 'sendMessage':
