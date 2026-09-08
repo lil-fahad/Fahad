@@ -1,0 +1,25 @@
+name: Railway Token Presence
+
+on:
+  push:
+    branches: [runtime-checksum-diagnosis]
+    paths:
+      - '.github/workflows/railway-token-presence.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check Railway token presence without exposing it
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        shell: bash
+        run: |
+          if [ -n "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN_PRESENT=true"
+          else
+            echo "RAILWAY_TOKEN_PRESENT=false"
+          fi
