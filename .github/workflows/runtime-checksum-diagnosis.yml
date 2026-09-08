@@ -15,6 +15,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Print changed test checksum
+        working-directory: telegram-options-ai-v6
+        run: sha256sum tests/test_model_shadow_gate.py
       - name: Verify runtime checksum gate
         working-directory: telegram-options-ai-v6
         shell: bash
