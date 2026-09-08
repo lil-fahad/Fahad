@@ -65,13 +65,22 @@ class RunRegistry:
         self._atomic_json(run_dir / "state.json", state)
         return RunRecord(run_id, str(kind), "RUNNING", dict(config), None, created, created)
 
+    def append_event(self, run_id: str, event: dict) -> None:
+        run_dir = self._run_dir(run_id)
+        event_path = run_dir / "events.jsonl"
+        if not event_path.is_file():
+            raise FileNotFoundError(f"Unknown run: {run_id}")
+        payload = dict(event)
+        payload.setdefault("at", self._now())
+        with event_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
     def mark_checkpoint(self, run_id: str, checkpoint: Path | str) -> None:
         run_dir = self._run_dir(run_id)
         state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
         state["latest_checkpoint"] = str(Path(checkpoint).expanduser().resolve())
         self._write_state(run_dir, state)
-        with (run_dir / "events.jsonl").open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"event": "checkpoint", "path": state["latest_checkpoint"], "at": self._now()}) + "\n")
+        self.append_event(run_id, {"event": "checkpoint", "path": state["latest_checkpoint"]})
 
     def set_status(self, run_id: str, status: str) -> None:
         if status not in {"RUNNING", "INTERRUPTED", "FAILED", "COMPLETED"}:
