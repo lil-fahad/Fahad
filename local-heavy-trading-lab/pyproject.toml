@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fahad-heavy-trading-lab"
+version = "0.1.0"
+description = "Local-first heavy AI training and evaluation lab for SPY/SPX research"
+requires-python = ">=3.12"
+dependencies = [
+  "typer>=0.16,<1",
+  "pydantic>=2.11,<3",
+  "psutil>=7,<8",
+  "platformdirs>=4.3,<5",
+  "huggingface_hub>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.4,<10"]
+
+[project.scripts]
+lab = "heavy_lab.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["heavy_lab*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
