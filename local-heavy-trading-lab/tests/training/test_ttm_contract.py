@@ -1,17 +1,27 @@
-def test_ttm_profile_uses_decoder_only_on_low_vram():
-    from heavy_lab.training.ttm import resolve_ttm_strategy
+from heavy_lab.hardware import HardwareProfile
 
-    strategy = resolve_ttm_strategy(device="cuda", vram_gb=8.0)
-    assert strategy.freeze_backbone is True
+
+def test_ttm_policy_keeps_full_finetune_on_8gb_cuda():
+    from heavy_lab.training.policy import plan_training
+
+    hardware = HardwareProfile(
+        os_name="Windows",
+        cpu_count=16,
+        device="cuda",
+        cuda=True,
+        mps=False,
+        ram_gb=32.0,
+        vram_gb=8.0,
+        disk_free_gb=500.0,
+        gpu_name="RTX 3070 Ti",
+        cuda_version="12.8",
+        compute_capability="8.6",
+        bf16=False,
+        fp16=True,
+    )
+    strategy = plan_training("ttm", hardware)
+    assert strategy.mode == "full"
     assert strategy.precision == "fp16"
-    assert strategy.gradient_accumulation_steps >= 1
-
-
-def test_ttm_profile_allows_full_finetune_on_large_gpu():
-    from heavy_lab.training.ttm import resolve_ttm_strategy
-
-    strategy = resolve_ttm_strategy(device="cuda", vram_gb=24.0)
-    assert strategy.freeze_backbone is False
 
 
 def test_ttm_windows_never_cross_forecast_origin():
