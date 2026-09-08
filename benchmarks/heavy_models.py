@@ -1,21 +1,18 @@
 import gc
 import json
 import math
-import os
-import statistics
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import httpx
 import numpy as np
-import pandas as pd
 import torch
 from dateutil import parser as dtparser
 
 CTX = 60
 H = 6
-ORIGINS_PER_SYMBOL = 6
+ORIGINS_PER_SYMBOL = 12
 SYMBOLS = ["SPY", "SPX"]
 NASDAQ_URL = "https://charting.nasdaq.com/data/charting/intraday"
 HEADERS = {
@@ -37,9 +34,8 @@ def _float(v: Any) -> float | None:
     if isinstance(v, (int, float)):
         x = float(v)
         return x if math.isfinite(x) else None
-    s = str(v).strip().replace("$", "").replace(",", "")
     try:
-        x = float(s)
+        x = float(str(v).strip().replace("$", "").replace(",", ""))
         return x if math.isfinite(x) else None
     except Exception:
         return None
@@ -113,7 +109,6 @@ def fetch_intraday(symbol: str) -> tuple[list[Bar], dict]:
             unique.append(b)
             seen.add(k)
 
-    # Aggregate minute-ish Nasdaq points to 5-minute closing bars without crossing dates.
     buckets: dict[tuple, Bar] = {}
     for b in unique:
         key = (b.ts.date(), b.ts.hour, b.ts.minute // 5)
@@ -133,30 +128,22 @@ def fetch_intraday(symbol: str) -> tuple[list[Bar], dict]:
 
 
 def contiguous(seq: list[Bar]) -> bool:
-    if len(seq) < 2:
-        return True
-    for a, b in zip(seq, seq[1:]):
-        dt = (b.ts - a.ts).total_seconds()
-        if not 240 <= dt <= 420:
-            return False
-    return True
+    return all(240 <= (b.ts - a.ts).total_seconds() <= 420 for a, b in zip(seq, seq[1:]))
 
 
 def build_windows(bars: list[Bar]) -> list[dict]:
     out = []
-    # Walk backwards and keep non-overlapping 30-minute holdouts.
     i = len(bars) - H
     while i >= CTX and len(out) < ORIGINS_PER_SYMBOL:
         full = bars[i - CTX : i + H]
         if len(full) == CTX + H and contiguous(full):
             hist = bars[i - CTX : i]
-            actual = bars[i + H - 1].close
             out.append(
                 {
                     "origin": hist[-1].ts.isoformat(),
                     "history": [b.close for b in hist],
                     "current": hist[-1].close,
-                    "actual": actual,
+                    "actual": bars[i + H - 1].close,
                     "actual_time": bars[i + H - 1].ts.isoformat(),
                 }
             )
@@ -164,9 +151,19 @@ def build_windows(bars: list[Bar]) -> list[dict]:
         else:
             i -= 1
     out.reverse()
-    if len(out) < 2:
+    if len(out) < 4:
         raise RuntimeError(f"only {len(out)} contiguous windows found")
     return out
+
+
+def wilson_interval(hits: int, n: int, z: float = 1.96) -> list[float] | None:
+    if n <= 0:
+        return None
+    p = hits / n
+    den = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / den
+    half = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n) / den
+    return [max(0.0, center - half), min(1.0, center + half)]
 
 
 def summarize(samples: list[dict]) -> dict:
@@ -174,18 +171,22 @@ def summarize(samples: list[dict]) -> dict:
     naive = [abs(x["current"] - x["actual"]) for x in samples]
     hits = []
     for x in samples:
-        pd = np.sign(x["predicted"] - x["current"])
-        ad = np.sign(x["actual"] - x["current"])
-        if ad != 0:
-            hits.append(int(pd == ad))
+        pdirection = np.sign(x["predicted"] - x["current"])
+        adirection = np.sign(x["actual"] - x["current"])
+        if adirection != 0:
+            hits.append(int(pdirection == adirection))
     mae = float(np.mean(errs))
     naive_mae = float(np.mean(naive))
+    hit_count = int(sum(hits))
     return {
         "n": len(samples),
         "mae": mae,
         "naive_mae": naive_mae,
         "skill_vs_last": (1.0 - mae / naive_mae) if naive_mae else None,
+        "direction_hits": hit_count,
+        "direction_n": len(hits),
         "direction_accuracy": float(np.mean(hits)) if hits else None,
+        "direction_wilson95": wilson_interval(hit_count, len(hits)),
         "rmse": float(np.sqrt(np.mean([(x["predicted"] - x["actual"]) ** 2 for x in samples]))),
     }
 
@@ -197,8 +198,7 @@ def run_timesfm(windows_by_symbol: dict[str, list[dict]]) -> dict:
     model = TimesFm2_5ModelForPrediction.from_pretrained(
         "google/timesfm-2.5-200m-transformers",
         low_cpu_mem_usage=True,
-    )
-    model = model.to(torch.float32).eval()
+    ).to(torch.float32).eval()
     print("MODEL_LOAD_OK timesfm", flush=True)
     result = {}
     with torch.no_grad():
@@ -218,18 +218,6 @@ def run_timesfm(windows_by_symbol: dict[str, list[dict]]) -> dict:
     return result
 
 
-def _extract_chronos(pred_df: pd.DataFrame) -> float:
-    preferred = ["0.5", "median", "mean", "predictions", "prediction"]
-    for c in preferred:
-        if c in pred_df.columns:
-            return float(pred_df[c].iloc[-1])
-    excluded = {"item_id", "timestamp"}
-    numeric = [c for c in pred_df.columns if c not in excluded and pd.api.types.is_numeric_dtype(pred_df[c])]
-    if not numeric:
-        raise RuntimeError(f"No numeric forecast column in Chronos output: {list(pred_df.columns)}")
-    return float(pred_df[numeric[0]].iloc[-1])
-
-
 def run_chronos(windows_by_symbol: dict[str, list[dict]]) -> dict:
     from chronos import Chronos2Pipeline
 
@@ -237,25 +225,23 @@ def run_chronos(windows_by_symbol: dict[str, list[dict]]) -> dict:
     pipeline = Chronos2Pipeline.from_pretrained("amazon/chronos-2", device_map="cpu")
     print("MODEL_LOAD_OK chronos2", flush=True)
     result = {}
-    for symbol, windows in windows_by_symbol.items():
-        samples = []
-        for j, w in enumerate(windows):
-            # Create synthetic regular timestamps only for the model input spacing;
-            # target values are the real Nasdaq closes and no future value is supplied.
-            ts = pd.date_range("2020-01-01", periods=len(w["history"]), freq="5min", tz="UTC")
-            frame = pd.DataFrame({"item_id": [f"{symbol}-{j}"] * len(ts), "timestamp": ts, "target": w["history"]})
-            pred_df = pipeline.predict_df(
-                frame,
-                prediction_length=H,
-                quantile_levels=[0.1, 0.5, 0.9],
-                id_column="item_id",
-                timestamp_column="timestamp",
-                target="target",
-                freq="5min",
-            )
-            pred = _extract_chronos(pred_df)
-            samples.append({k: v for k, v in w.items() if k != "history"} | {"predicted": pred})
-        result[symbol] = {"metrics": summarize(samples), "samples": samples}
+    with torch.no_grad():
+        for symbol, windows in windows_by_symbol.items():
+            samples = []
+            for w in windows:
+                series = torch.tensor(w["history"], dtype=torch.float32)
+                _, mean = pipeline.predict_quantiles(
+                    inputs=[series],
+                    prediction_length=H,
+                    quantile_levels=[0.1, 0.5, 0.9],
+                    batch_size=1,
+                )
+                arr = mean[0].detach().cpu().numpy().reshape(-1)
+                if len(arr) < H:
+                    raise RuntimeError(f"Chronos output too short: {len(arr)}")
+                pred = float(arr[H - 1])
+                samples.append({k: v for k, v in w.items() if k != "history"} | {"predicted": pred})
+            result[symbol] = {"metrics": summarize(samples), "samples": samples}
     del pipeline
     gc.collect()
     return result
@@ -264,7 +250,7 @@ def run_chronos(windows_by_symbol: dict[str, list[dict]]) -> dict:
 def verdict(metrics: dict) -> str:
     s = metrics.get("skill_vs_last")
     d = metrics.get("direction_accuracy")
-    if s is not None and d is not None and s > 0 and d >= 0.55:
+    if s is not None and d is not None and s > 0 and d >= 0.58:
         return "PASS_SHADOW_CANDIDATE"
     return "REJECT_OR_KEEP_SHADOW"
 
@@ -289,6 +275,7 @@ def main():
             "horizon_bars": H,
             "horizon_minutes": 30,
             "walk_forward": True,
+            "holdouts_non_overlapping_by_horizon": True,
             "synthetic_market_data": False,
         },
         "data": data_meta,
@@ -303,6 +290,8 @@ def main():
             output["models"][name] = {"status": "ok", "results": res}
             print(f"MODEL_OK {name}", flush=True)
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             output["models"][name] = {"status": "error", "error": repr(exc)}
             print(f"MODEL_ERROR {name}: {exc!r}", flush=True)
         gc.collect()
@@ -320,7 +309,8 @@ def main():
             m = r["metrics"]
             lines.append(
                 f"- {sym}: n={m['n']}, MAE={m['mae']:.6f}, baseline={m['naive_mae']:.6f}, "
-                f"skill={m['skill_vs_last']:.3%}, direction={m['direction_accuracy']:.3%}, verdict={r['verdict']}"
+                f"skill={m['skill_vs_last']:.3%}, direction={m['direction_accuracy']:.3%}, "
+                f"hits={m['direction_hits']}/{m['direction_n']}, Wilson95={m['direction_wilson95']}, verdict={r['verdict']}"
             )
     with open("benchmark_summary.md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
