@@ -4,7 +4,9 @@ from dataclasses import asdict, dataclass
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
+import subprocess
 
 import psutil
 
@@ -40,8 +42,8 @@ def _disk_free_gb(path: Path) -> float:
     return _gb(shutil.disk_usage(probe).free)
 
 
-def _torch_probe() -> dict:
-    result = {
+def _blank_probe() -> dict:
+    return {
         "cuda": False,
         "mps": False,
         "device": "cpu",
@@ -52,6 +54,10 @@ def _torch_probe() -> dict:
         "bf16": False,
         "fp16": False,
     }
+
+
+def _torch_probe() -> dict:
+    result = _blank_probe()
     try:
         import torch
     except Exception:
@@ -85,22 +91,85 @@ def _torch_probe() -> dict:
     return result
 
 
+def _nvidia_smi_probe() -> dict | None:
+    """Probe an NVIDIA GPU without importing PyTorch.
+
+    `nvidia-smi` ships with the NVIDIA driver and is therefore usable during a
+    fresh install before a CUDA-enabled PyTorch wheel exists.
+    """
+    executable = shutil.which("nvidia-smi")
+    if not executable:
+        return None
+    try:
+        header = subprocess.run(
+            [executable],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=8,
+        ).stdout
+        cuda_match = re.search(r"CUDA Version:\s*([0-9]+(?:\.[0-9]+)?)", header)
+        cuda_version = cuda_match.group(1) if cuda_match else None
+
+        query = subprocess.run(
+            [
+                executable,
+                "--query-gpu=name,memory.total,compute_cap",
+                "--format=csv,noheader,nounits",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=8,
+        ).stdout.strip().splitlines()[0]
+        parts = [part.strip() for part in query.split(",")]
+        gpu_name = parts[0] if parts else None
+        memory_mib = float(parts[1]) if len(parts) > 1 else 0.0
+        compute_capability = parts[2] if len(parts) > 2 and parts[2] else None
+        cap_major = 0
+        try:
+            cap_major = int(float(compute_capability or "0"))
+        except ValueError:
+            pass
+        return {
+            "cuda": True,
+            "mps": False,
+            "device": "cuda",
+            "vram_gb": round(memory_mib / 1024.0, 3),
+            "gpu_name": gpu_name,
+            "cuda_version": cuda_version,
+            "compute_capability": compute_capability,
+            "bf16": cap_major >= 8,
+            "fp16": True,
+        }
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+
+
+def _pre_torch_apple_probe() -> dict | None:
+    if platform.system() == "Darwin" and platform.machine().lower() in {"arm64", "aarch64"}:
+        result = _blank_probe()
+        result.update(mps=True, device="mps", fp16=True, gpu_name="Apple Silicon")
+        return result
+    return None
+
+
 def detect_hardware(storage_root: Path | str = Path.cwd()) -> HardwareProfile:
     forced = os.getenv("HEAVY_LAB_FORCE_DEVICE", "").strip().lower()
     torch_info = _torch_probe()
+
+    if forced != "cpu" and torch_info["device"] == "cpu":
+        nvidia_info = _nvidia_smi_probe()
+        if nvidia_info is not None:
+            torch_info = nvidia_info
+        else:
+            apple_info = _pre_torch_apple_probe()
+            if apple_info is not None:
+                torch_info = apple_info
+
     if forced == "cpu":
-        torch_info.update(
-            cuda=False,
-            mps=False,
-            device="cpu",
-            vram_gb=None,
-            gpu_name=None,
-            cuda_version=None,
-            compute_capability=None,
-            bf16=False,
-            fp16=False,
-        )
-    elif forced in {"cuda", "mps"} and torch_info[forced]:
+        torch_info = _blank_probe()
+    elif forced in {"cuda", "mps"} and torch_info.get(forced):
         torch_info["device"] = forced
 
     return HardwareProfile(
