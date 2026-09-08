@@ -1,0 +1,449 @@
+{
+  "model_version": "historical-analogues-v1",
+  "symbol": "DEMO",
+  "horizon_sessions": 5,
+  "source": "Synthetic seeded demonstration; NOT market prices",
+  "basis": "synthetic",
+  "currency": "USD",
+  "as_of": "2026-09-04",
+  "retrieved_at": "2026-09-07T03:33:17.522110+00:00",
+  "data_age_calendar_days": 3,
+  "bars_used": 1200,
+  "data_sha256": "3e870edbc86d2f9cc5635dc2cb866342da8a788fb5c4979a1d41027a8d6f3e6c",
+  "synthetic": true,
+  "stale": false,
+  "signal": "abstain",
+  "abstain_reasons": [
+    "بيانات محاكاة",
+    "النموذج لم يتفوق على المقارنة البسيطة في المقياسين",
+    "احتمال الاتجاه قريب من التعادل"
+  ],
+  "warnings": [],
+  "last_close": 191.47111500024792,
+  "probability_up": 0.5244056283357593,
+  "probability_kind": "smoothed empirical frequency; not calibrated or guaranteed",
+  "analog_count": 40,
+  "forecast_price": 193.04455013427193,
+  "forecast_return_pct": 0.8217610964567561,
+  "price_interval": [
+    184.24116047849816,
+    203.75696538556812
+  ],
+  "interval_nominal_coverage": 0.8,
+  "interval_kind": "historical analogue 10th–90th percentiles; no coverage guarantee",
+  "backtest": {
+    "n": 40,
+    "start": "2025-11-24",
+    "end": "2026-08-31",
+    "direction_accuracy": 0.425,
+    "baseline_direction_accuracy": 0.475,
+    "brier": 0.271049709860747,
+    "baseline_brier": 0.2538676448392391,
+    "mae_pct": 3.375315399445321,
+    "baseline_mae_pct": 3.126068465032324,
+    "interval_coverage": 0.725,
+    "method": "expanding-window, purged labels, non-overlapping test outcomes",
+    "rows": [
+      {
+        "origin": "2025-11-24",
+        "target_date": "2025-12-01",
+        "training_labels_end": "2025-11-21",
+        "probability_up": 0.6591016548463358,
+        "baseline_probability_up": 0.5319148936170213,
+        "predicted_return": 0.011499115090836275,
+        "actual_return": 0.09056073080012372,
+        "covered": false
+      },
+      {
+        "origin": "2025-12-01",
+        "target_date": "2025-12-08",
+        "training_labels_end": "2025-11-28",
+        "probability_up": 0.5699000587889477,
+        "baseline_probability_up": 0.5291005291005291,
+        "predicted_return": 0.005145053546834763,
+        "actual_return": -0.06548196423176955,
+        "covered": false
+      },
+      {
+        "origin": "2025-12-08",
+        "target_date": "2025-12-15",
+        "training_labels_end": "2025-12-05",
+        "probability_up": 0.6812865497076024,
+        "baseline_probability_up": 0.531578947368421,
+        "predicted_return": 0.009614777393342247,
+        "actual_return": -0.010247737184765904,
+        "covered": true
+      },
+      {
+        "origin": "2025-12-15",
+        "target_date": "2025-12-22",
+        "training_labels_end": "2025-12-12",
+        "probability_up": 0.5476439790575915,
+        "baseline_probability_up": 0.5287958115183246,
+        "predicted_return": 0.0022609944876502202,
+        "actual_return": -0.060092763702676355,
+        "covered": false
+      },
+      {
+        "origin": "2025-12-22",
+        "target_date": "2025-12-29",
+        "training_labels_end": "2025-12-19",
+        "probability_up": 0.5695601851851851,
+        "baseline_probability_up": 0.5260416666666666,
+        "predicted_return": 0.002627361402090559,
+        "actual_return": -0.006911382183466985,
+        "covered": true
+      },
+      {
+        "origin": "2025-12-29",
+        "target_date": "2026-01-05",
+        "training_labels_end": "2025-12-26",
+        "probability_up": 0.6359240069084628,
+        "baseline_probability_up": 0.5233160621761658,
+        "predicted_return": 0.014503482343444398,
+        "actual_return": -0.04423550590970626,
+        "covered": true
+      },
+      {
+        "origin": "2026-01-05",
+        "target_date": "2026-01-12",
+        "training_labels_end": "2026-01-02",
+        "probability_up": 0.5467353951890034,
+        "baseline_probability_up": 0.520618556701031,
+        "predicted_return": 0.004620409729665221,
+        "actual_return": -0.005718140557215423,
+        "covered": true
+      },
+      {
+        "origin": "2026-01-12",
+        "target_date": "2026-01-19",
+        "training_labels_end": "2026-01-09",
+        "probability_up": 0.6353276353276354,
+        "baseline_probability_up": 0.517948717948718,
+        "predicted_return": 0.01180447994624307,
+        "actual_return": -0.02309067542853105,
+        "covered": true
+      },
+      {
+        "origin": "2026-01-19",
+        "target_date": "2026-01-26",
+        "training_labels_end": "2026-01-16",
+        "probability_up": 0.6350340136054422,
+        "baseline_probability_up": 0.5153061224489796,
+        "predicted_return": 0.024487569212164734,
+        "actual_return": 0.0071551012469999176,
+        "covered": true
+      },
+      {
+        "origin": "2026-01-26",
+        "target_date": "2026-02-02",
+        "training_labels_end": "2026-01-23",
+        "probability_up": 0.5902989283699943,
+        "baseline_probability_up": 0.5126903553299492,
+        "predicted_return": 0.0028679531799986027,
+        "actual_return": -0.013695499368190922,
+        "covered": true
+      },
+      {
+        "origin": "2026-02-02",
+        "target_date": "2026-02-09",
+        "training_labels_end": "2026-01-30",
+        "probability_up": 0.5016835016835016,
+        "baseline_probability_up": 0.5151515151515151,
+        "predicted_return": 0.0004011214580290235,
+        "actual_return": -0.06793302952352498,
+        "covered": false
+      },
+      {
+        "origin": "2026-02-09",
+        "target_date": "2026-02-16",
+        "training_labels_end": "2026-02-06",
+        "probability_up": 0.5013958682300391,
+        "baseline_probability_up": 0.5125628140703518,
+        "predicted_return": 0.0009200118326100214,
+        "actual_return": 0.005597679456946336,
+        "covered": true
+      },
+      {
+        "origin": "2026-02-16",
+        "target_date": "2026-02-23",
+        "training_labels_end": "2026-02-13",
+        "probability_up": 0.43444444444444447,
+        "baseline_probability_up": 0.51,
+        "predicted_return": -0.016814609987571717,
+        "actual_return": 0.03467020316731828,
+        "covered": false
+      },
+      {
+        "origin": "2026-02-23",
+        "target_date": "2026-03-02",
+        "training_labels_end": "2026-02-20",
+        "probability_up": 0.5236042012161415,
+        "baseline_probability_up": 0.5124378109452736,
+        "predicted_return": 0.0015558648530995523,
+        "actual_return": 0.06919099167431386,
+        "covered": false
+      },
+      {
+        "origin": "2026-03-02",
+        "target_date": "2026-03-09",
+        "training_labels_end": "2026-02-27",
+        "probability_up": 0.45720572057205716,
+        "baseline_probability_up": 0.5148514851485149,
+        "predicted_return": -0.0027290151354152645,
+        "actual_return": -0.030462605536720533,
+        "covered": true
+      },
+      {
+        "origin": "2026-03-09",
+        "target_date": "2026-03-16",
+        "training_labels_end": "2026-03-06",
+        "probability_up": 0.5685823754789272,
+        "baseline_probability_up": 0.5172413793103449,
+        "predicted_return": 0.009573451864465257,
+        "actual_return": -0.00447685803767639,
+        "covered": true
+      },
+      {
+        "origin": "2026-03-16",
+        "target_date": "2026-03-23",
+        "training_labels_end": "2026-03-13",
+        "probability_up": 0.5460784313725491,
+        "baseline_probability_up": 0.5147058823529411,
+        "predicted_return": 0.00368884256737799,
+        "actual_return": -0.003961131074105784,
+        "covered": true
+      },
+      {
+        "origin": "2026-03-23",
+        "target_date": "2026-03-30",
+        "training_labels_end": "2026-03-20",
+        "probability_up": 0.5013550135501356,
+        "baseline_probability_up": 0.5121951219512195,
+        "predicted_return": 0.001032268470597047,
+        "actual_return": -0.014111174485698319,
+        "covered": true
+      },
+      {
+        "origin": "2026-03-30",
+        "target_date": "2026-04-06",
+        "training_labels_end": "2026-03-27",
+        "probability_up": 0.6566343042071198,
+        "baseline_probability_up": 0.5097087378640777,
+        "predicted_return": 0.010800468838867927,
+        "actual_return": 0.0002326623766635283,
+        "covered": true
+      },
+      {
+        "origin": "2026-04-06",
+        "target_date": "2026-04-13",
+        "training_labels_end": "2026-04-03",
+        "probability_up": 0.5230273752012883,
+        "baseline_probability_up": 0.5072463768115942,
+        "predicted_return": 0.0032339113474402427,
+        "actual_return": -0.05126927266362902,
+        "covered": false
+      },
+      {
+        "origin": "2026-04-13",
+        "target_date": "2026-04-20",
+        "training_labels_end": "2026-04-10",
+        "probability_up": 0.6344017094017094,
+        "baseline_probability_up": 0.5096153846153846,
+        "predicted_return": 0.010608437034688254,
+        "actual_return": -0.05541089119689091,
+        "covered": false
+      },
+      {
+        "origin": "2026-04-20",
+        "target_date": "2026-04-27",
+        "training_labels_end": "2026-04-17",
+        "probability_up": 0.5896863370547581,
+        "baseline_probability_up": 0.507177033492823,
+        "predicted_return": 0.011572627806412966,
+        "actual_return": -0.003156449087958979,
+        "covered": true
+      },
+      {
+        "origin": "2026-04-27",
+        "target_date": "2026-05-04",
+        "training_labels_end": "2026-04-24",
+        "probability_up": 0.5671957671957673,
+        "baseline_probability_up": 0.5047619047619047,
+        "predicted_return": 0.0038785471117792287,
+        "actual_return": 0.029670597718096436,
+        "covered": true
+      },
+      {
+        "origin": "2026-05-04",
+        "target_date": "2026-05-11",
+        "training_labels_end": "2026-05-01",
+        "probability_up": 0.47804107424960507,
+        "baseline_probability_up": 0.5023696682464455,
+        "predicted_return": -0.0044711310312095815,
+        "actual_return": 0.018561467311357882,
+        "covered": true
+      },
+      {
+        "origin": "2026-05-11",
+        "target_date": "2026-05-18",
+        "training_labels_end": "2026-05-08",
+        "probability_up": 0.389412997903564,
+        "baseline_probability_up": 0.5047169811320755,
+        "predicted_return": -0.011880194120673832,
+        "actual_return": 0.029525790735132285,
+        "covered": true
+      },
+      {
+        "origin": "2026-05-18",
+        "target_date": "2026-05-25",
+        "training_labels_end": "2026-05-15",
+        "probability_up": 0.4785602503912363,
+        "baseline_probability_up": 0.5070422535211268,
+        "predicted_return": -0.002503822896098945,
+        "actual_return": 0.048881016514001896,
+        "covered": true
+      },
+      {
+        "origin": "2026-05-25",
+        "target_date": "2026-06-01",
+        "training_labels_end": "2026-05-22",
+        "probability_up": 0.5232606438213915,
+        "baseline_probability_up": 0.5093457943925234,
+        "predicted_return": 0.0020564332190298254,
+        "actual_return": 0.057170770171541374,
+        "covered": true
+      },
+      {
+        "origin": "2026-06-01",
+        "target_date": "2026-06-08",
+        "training_labels_end": "2026-05-29",
+        "probability_up": 0.5679586563307494,
+        "baseline_probability_up": 0.5116279069767442,
+        "predicted_return": 0.004381422607125624,
+        "actual_return": -0.0019710521148620375,
+        "covered": true
+      },
+      {
+        "origin": "2026-06-08",
+        "target_date": "2026-06-15",
+        "training_labels_end": "2026-06-05",
+        "probability_up": 0.5237654320987654,
+        "baseline_probability_up": 0.5138888888888888,
+        "predicted_return": 0.007315907933337246,
+        "actual_return": -0.03947545573096012,
+        "covered": false
+      },
+      {
+        "origin": "2026-06-15",
+        "target_date": "2026-06-22",
+        "training_labels_end": "2026-06-12",
+        "probability_up": 0.5901689708141321,
+        "baseline_probability_up": 0.511520737327189,
+        "predicted_return": 0.0022609944876502202,
+        "actual_return": -0.06759325205076372,
+        "covered": false
+      },
+      {
+        "origin": "2026-06-22",
+        "target_date": "2026-06-29",
+        "training_labels_end": "2026-06-19",
+        "probability_up": 0.589908256880734,
+        "baseline_probability_up": 0.5091743119266054,
+        "predicted_return": 0.007974491235806958,
+        "actual_return": -0.02261004403018607,
+        "covered": true
+      },
+      {
+        "origin": "2026-06-29",
+        "target_date": "2026-07-06",
+        "training_labels_end": "2026-06-26",
+        "probability_up": 0.5229832572298325,
+        "baseline_probability_up": 0.5068493150684932,
+        "predicted_return": 0.002627361402090559,
+        "actual_return": 0.02036056227240901,
+        "covered": true
+      },
+      {
+        "origin": "2026-07-06",
+        "target_date": "2026-07-13",
+        "training_labels_end": "2026-07-03",
+        "probability_up": 0.6116161616161616,
+        "baseline_probability_up": 0.5045454545454545,
+        "predicted_return": 0.00987974431895624,
+        "actual_return": 0.016122365584410492,
+        "covered": true
+      },
+      {
+        "origin": "2026-07-13",
+        "target_date": "2026-07-20",
+        "training_labels_end": "2026-07-10",
+        "probability_up": 0.4785319255907491,
+        "baseline_probability_up": 0.5067873303167421,
+        "predicted_return": -0.002917661936815657,
+        "actual_return": -0.019635956610756233,
+        "covered": true
+      },
+      {
+        "origin": "2026-07-20",
+        "target_date": "2026-07-27",
+        "training_labels_end": "2026-07-17",
+        "probability_up": 0.5454454454454454,
+        "baseline_probability_up": 0.509009009009009,
+        "predicted_return": 0.00441828340542104,
+        "actual_return": 0.04299504453017744,
+        "covered": true
+      },
+      {
+        "origin": "2026-07-27",
+        "target_date": "2026-08-03",
+        "training_labels_end": "2026-07-24",
+        "probability_up": 0.5229696063776781,
+        "baseline_probability_up": 0.5067264573991032,
+        "predicted_return": 0.009303841905081408,
+        "actual_return": 0.011905062900726238,
+        "covered": true
+      },
+      {
+        "origin": "2026-08-03",
+        "target_date": "2026-08-10",
+        "training_labels_end": "2026-07-31",
+        "probability_up": 0.5898809523809524,
+        "baseline_probability_up": 0.5089285714285714,
+        "predicted_return": 0.008845375779345096,
+        "actual_return": 0.08345521194036976,
+        "covered": false
+      },
+      {
+        "origin": "2026-08-10",
+        "target_date": "2026-08-17",
+        "training_labels_end": "2026-08-07",
+        "probability_up": 0.5456790123456791,
+        "baseline_probability_up": 0.5111111111111111,
+        "predicted_return": 0.004744368332159313,
+        "actual_return": 0.005845431583131555,
+        "covered": true
+      },
+      {
+        "origin": "2026-08-17",
+        "target_date": "2026-08-24",
+        "training_labels_end": "2026-08-14",
+        "probability_up": 0.5459193706981318,
+        "baseline_probability_up": 0.5132743362831859,
+        "predicted_return": 0.002367584965703393,
+        "actual_return": 0.018088430353126572,
+        "covered": true
+      },
+      {
+        "origin": "2026-08-24",
+        "target_date": "2026-08-31",
+        "training_labels_end": "2026-08-21",
+        "probability_up": 0.5461576113558493,
+        "baseline_probability_up": 0.5154185022026432,
+        "predicted_return": 0.004228274627917929,
+        "actual_return": 0.04889742496602744,
+        "covered": true
+      }
+    ]
+  }
+}

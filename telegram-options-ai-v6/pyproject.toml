@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fahad-telegram-bridge"
+version = "6.0.0"
+description = "Private Telegram bot with SPY/SPX options PAPER and optional Chronos-2 TimesFM FinBERT ensemble"
+requires-python = ">=3.12"
+dependencies = ["mcp==1.29.1", "httpx==0.28.1", "tzdata==2025.2"]
+
+[project.scripts]
+telegram-bridge = "telegram_bridge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["telegram_bridge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
