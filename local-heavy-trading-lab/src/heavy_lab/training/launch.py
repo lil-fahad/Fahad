@@ -12,7 +12,9 @@ from heavy_lab.runs import RunRegistry
 from heavy_lab.training.base import MemoryProbeResult
 from heavy_lab.training.chronos2 import Chronos2Trainer
 from heavy_lab.training.datasets import build_timesfm_examples, build_ttm_examples
+from heavy_lab.training.finbert import FinBERTTrainer
 from heavy_lab.training.integrations.chronos2_native import load_chronos2_pipeline
+from heavy_lab.training.integrations.finbert_hf import FinBERTHFModelAdapter
 from heavy_lab.training.integrations.timesfm_hf import TimesFMHFModelAdapter
 from heavy_lab.training.integrations.ttm_hf import TTMHFModelAdapter
 from heavy_lab.training.policy import plan_training
@@ -62,3 +64,24 @@ def run_chronos2_training(*, root: Path, train_frame: pd.DataFrame, validation_f
     registry = RunRegistry(paths.runs); run = registry.start("chronos2", {"context_length": context_length, "prediction_length": prediction_length, "steps": steps, "learning_rate": learning_rate, "model_path": str(model_path), "finetune_mode": "full" if preflight.safe_full_finetune else "lora", "preflight_reason": preflight.reason})
     trainer = Chronos2Trainer(registry, model=pipeline)
     return trainer.train(trainer.prepare(run, {"train": train_windows, "validation": validation_windows}, hardware.as_dict(), preflight=preflight, output_root=paths.checkpoints, epochs=steps, learning_rate=learning_rate))
+
+
+def run_finbert_training(*, root: Path, train_examples, validation_examples, epochs: int = 1, learning_rate: float = 1e-5, hardware: HardwareProfile | None = None, adapter_factory: Callable[..., Any] = FinBERTHFModelAdapter):
+    if epochs <= 0 or learning_rate <= 0:
+        raise ValueError("epochs and learning_rate must be positive")
+    paths = LabPaths.from_root(Path(root)); paths.ensure_runtime_dirs()
+    hardware = hardware or detect_hardware(paths.root)
+    model_path = paths.models_base / MODEL_CATALOG["finbert"].local_name
+    adapter = adapter_factory(model_path=model_path, device=hardware.device)
+    registry = RunRegistry(paths.runs)
+    run = registry.start("finbert", {"epochs": epochs, "learning_rate": learning_rate, "model_path": str(model_path)})
+    trainer = FinBERTTrainer(registry, model=adapter)
+    plan = trainer.prepare(
+        run,
+        {"train": list(train_examples), "validation": list(validation_examples)},
+        hardware.as_dict(),
+        output_root=paths.checkpoints,
+        epochs=epochs,
+        learning_rate=learning_rate,
+    )
+    return trainer.train(plan)
