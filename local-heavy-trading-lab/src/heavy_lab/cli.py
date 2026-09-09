@@ -40,6 +40,24 @@ def _integration_not_ready(model_name: str) -> None:
     )
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    rows: list[dict] = []
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise typer.BadParameter(f"Invalid JSONL at {path}:{line_number}: {exc.msg}") from exc
+        if not isinstance(item, dict):
+            raise typer.BadParameter(f"JSONL row {line_number} in {path} must be an object")
+        rows.append(item)
+    if not rows:
+        raise typer.BadParameter(f"JSONL file is empty: {path}")
+    return rows
+
+
 @app.command()
 def version() -> None:
     typer.echo(__version__)
@@ -115,17 +133,34 @@ def train_kronos_command(
 
 
 @app.command("train-finbert")
-def train_finbert_command(root: Path = typer.Option(Path.cwd(), "--root")) -> None:
-    _ = root
-    _integration_not_ready("FinBERT")
+def train_finbert_command(
+    train_jsonl: Path = typer.Option(..., "--train-jsonl", exists=True, dir_okay=False, readable=True),
+    validation_jsonl: Path = typer.Option(..., "--validation-jsonl", exists=True, dir_okay=False, readable=True),
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    epochs: int = typer.Option(1, "--epochs", min=1),
+    learning_rate: float = typer.Option(1e-5, "--learning-rate", min=1e-12),
+) -> None:
+    from heavy_lab.training.launch import run_finbert_training
+
+    train_examples = _read_jsonl(train_jsonl)
+    validation_examples = _read_jsonl(validation_jsonl)
+    _echo_train_result(
+        run_finbert_training(
+            root=root,
+            train_examples=train_examples,
+            validation_examples=validation_examples,
+            epochs=epochs,
+            learning_rate=learning_rate,
+        )
+    )
 
 
 @app.command("train-all")
 def train_all_command(root: Path = typer.Option(Path.cwd(), "--root")) -> None:
     _ = root
     raise typer.BadParameter(
-        "train-all is registered but will remain blocked until Kronos and FinBERT have real local adapters. "
-        "Heavy jobs will run sequentially once those integrations are complete."
+        "train-all is registered but will remain blocked until Kronos has a real local adapter. "
+        "Heavy jobs will run sequentially once that integration is complete."
     )
 
 
