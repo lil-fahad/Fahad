@@ -46,6 +46,12 @@ finbert-train = [
   "transformers==5.16.1",
   "accelerate==1.14.0",
 ]
+kronos-train = [
+  "einops==0.8.1",
+  "safetensors>=0.6,<1",
+  "PyYAML>=6,<7",
+  "tqdm>=4.67,<5",
+]
 
 [project.scripts]
 lab = "heavy_lab.cli:app"
