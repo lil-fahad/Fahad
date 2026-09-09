@@ -1,4 +1,5 @@
 param(
+    [switch]$Training,
     [switch]$DownloadModels,
     [string]$Root = (Get-Location).Path
 )
@@ -26,9 +27,18 @@ if (-not (Test-Path ".venv")) {
 
 $VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
 & $VenvPython -m pip install --upgrade pip setuptools wheel
-& $VenvPython -m pip install -e ".[dev]"
+& $VenvPython -m pip install -e ".[dev,data,eval]"
+
+# Resolve/install the hardware-compatible PyTorch build before model training
+# extras so dependency resolution cannot silently replace it with a CPU or
+# incompatible CUDA wheel.
 & $VenvPython scripts\install_torch.py
-& $VenvPython -m heavy_lab.cli doctor --json
+
+if ($Training) {
+    & $VenvPython -m pip install -e ".[ttm-train,timesfm-train,chronos-train,finbert-train,kronos-train]"
+}
+
+& $VenvPython -m heavy_lab.cli doctor --root $Root --json
 
 if ($DownloadModels) {
     & $VenvPython -m heavy_lab.cli download-models --all --root $Root
@@ -36,4 +46,8 @@ if ($DownloadModels) {
 
 Write-Host "Local Heavy Trading Lab installed successfully."
 Write-Host "Activate with: .\.venv\Scripts\Activate.ps1"
-Write-Host "Then run: lab doctor --json"
+if ($Training) {
+    Write-Host "Training dependencies installed. Run: lab training-ready --root . --json"
+} else {
+    Write-Host "For heavy training dependencies rerun with: .\scripts\install_windows.ps1 -Training"
+}
