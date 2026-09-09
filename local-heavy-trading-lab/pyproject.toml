@@ -37,6 +37,11 @@ timesfm-train = [
   "peft==0.20.0",
   "accelerate==1.14.0",
 ]
+chronos-train = [
+  "chronos-forecasting==2.3.2",
+  "peft>=0.18.1,<1",
+  "accelerate>=1.1,<2",
+]
 
 [project.scripts]
 lab = "heavy_lab.cli:app"
