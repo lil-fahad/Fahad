@@ -77,6 +77,33 @@ def doctor(root: Path = typer.Option(Path.cwd(), "--root"), json_output: bool = 
     typer.echo(json.dumps(report, indent=2, sort_keys=True) if json_output else f"device={report['hardware']['device']} profile={report['training_profile']}")
 
 
+@app.command("training-ready")
+def training_ready_command(
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    train_parquet: Path | None = typer.Option(None, "--train-parquet"),
+    validation_parquet: Path | None = typer.Option(None, "--validation-parquet"),
+    finbert_train_jsonl: Path | None = typer.Option(None, "--finbert-train-jsonl"),
+    finbert_validation_jsonl: Path | None = typer.Option(None, "--finbert-validation-jsonl"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    from heavy_lab.training.readiness import training_readiness
+
+    report = training_readiness(
+        root=Path(root).expanduser().resolve(),
+        train_parquet=train_parquet,
+        validation_parquet=validation_parquet,
+        finbert_train_jsonl=finbert_train_jsonl,
+        finbert_validation_jsonl=finbert_validation_jsonl,
+    )
+    if json_output:
+        typer.echo(json.dumps(report, indent=2, sort_keys=True))
+        return
+    if report["ready"]:
+        typer.echo("READY: all local heavy-training requirements are satisfied")
+    else:
+        typer.echo("NOT READY: " + ", ".join(report["missing"]))
+
+
 @app.command("download-models")
 def download_models_command(root: Path = typer.Option(Path.cwd(), "--root"), all_models: bool = typer.Option(False, "--all"), model: list[str] | None = typer.Option(None, "--model")) -> None:
     from heavy_lab.models.catalog import MODEL_CATALOG
