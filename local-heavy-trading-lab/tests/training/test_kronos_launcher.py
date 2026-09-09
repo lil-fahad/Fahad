@@ -66,17 +66,15 @@ def test_run_kronos_training_executes_pinned_official_flow(tmp_path: Path):
         return Completed()
 
     hardware = HardwareProfile(
-        system="Windows",
-        machine="AMD64",
+        os_name="Windows",
         cpu_count=16,
-        ram_gb=32.0,
-        disk_free_gb=200.0,
-        torch_installed=True,
+        device="cuda",
         cuda=True,
         mps=False,
-        device="cuda",
-        gpu_name="NVIDIA GeForce RTX 3070 Ti",
+        ram_gb=32.0,
         vram_gb=8.0,
+        disk_free_gb=200.0,
+        gpu_name="NVIDIA GeForce RTX 3070 Ti",
         cuda_version="12.8",
         compute_capability="8.6",
         bf16=True,
