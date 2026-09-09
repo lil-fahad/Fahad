@@ -42,6 +42,10 @@ chronos-train = [
   "peft>=0.18.1,<1",
   "accelerate>=1.1,<2",
 ]
+finbert-train = [
+  "transformers==5.16.1",
+  "accelerate==1.14.0",
+]
 
 [project.scripts]
 lab = "heavy_lab.cli:app"
