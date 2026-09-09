@@ -33,6 +33,13 @@ def _heavy_preflight(hardware, micro_batch_size: int, model_name: str):
     )
 
 
+def _integration_not_ready(model_name: str) -> None:
+    raise typer.BadParameter(
+        f"{model_name} local training integration is not wired yet. "
+        "The command is registered deliberately so dependency/setup gaps fail explicitly instead of silently falling back."
+    )
+
+
 @app.command()
 def version() -> None:
     typer.echo(__version__)
@@ -96,6 +103,30 @@ def train_chronos2_command(train_parquet: Path = typer.Option(..., "--train-parq
     hardware = detect_hardware(Path(root))
     preflight = _heavy_preflight(hardware, micro_batch_size, "Chronos-2")
     _echo_train_result(run_chronos2_training(root=root, train_frame=train_frame, validation_frame=validation_frame, context_length=context_length, prediction_length=prediction_length, steps=steps, learning_rate=learning_rate, hardware=hardware, preflight=preflight))
+
+
+@app.command("train-kronos")
+def train_kronos_command(
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    micro_batch_size: int = typer.Option(1, "--micro-batch-size", min=1),
+) -> None:
+    _ = (root, micro_batch_size)
+    _integration_not_ready("Kronos")
+
+
+@app.command("train-finbert")
+def train_finbert_command(root: Path = typer.Option(Path.cwd(), "--root")) -> None:
+    _ = root
+    _integration_not_ready("FinBERT")
+
+
+@app.command("train-all")
+def train_all_command(root: Path = typer.Option(Path.cwd(), "--root")) -> None:
+    _ = root
+    raise typer.BadParameter(
+        "train-all is registered but will remain blocked until Kronos and FinBERT have real local adapters. "
+        "Heavy jobs will run sequentially once those integrations are complete."
+    )
 
 
 if __name__ == "__main__":
