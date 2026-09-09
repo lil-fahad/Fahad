@@ -125,11 +125,28 @@ def train_chronos2_command(train_parquet: Path = typer.Option(..., "--train-parq
 
 @app.command("train-kronos")
 def train_kronos_command(
+    train_parquet: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+    validation_parquet: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
     root: Path = typer.Option(Path.cwd(), "--root"),
-    micro_batch_size: int = typer.Option(1, "--micro-batch-size", min=1),
+    lookback_window: int = typer.Option(64, "--lookback-window", min=2),
+    predict_window: int = typer.Option(16, "--predict-window", min=1),
+    tokenizer_epochs: int = typer.Option(1, "--tokenizer-epochs", min=1),
+    predictor_epochs: int = typer.Option(1, "--predictor-epochs", min=1),
 ) -> None:
-    _ = (root, micro_batch_size)
-    _integration_not_ready("Kronos")
+    from heavy_lab.training.launch import run_kronos_training
+
+    train_frame, validation_frame = _read_splits(train_parquet, validation_parquet)
+    _echo_train_result(
+        run_kronos_training(
+            root=Path(root).expanduser().resolve(),
+            train_frame=train_frame,
+            validation_frame=validation_frame,
+            lookback_window=lookback_window,
+            predict_window=predict_window,
+            tokenizer_epochs=tokenizer_epochs,
+            predictor_epochs=predictor_epochs,
+        )
+    )
 
 
 @app.command("train-finbert")
@@ -159,8 +176,8 @@ def train_finbert_command(
 def train_all_command(root: Path = typer.Option(Path.cwd(), "--root")) -> None:
     _ = root
     raise typer.BadParameter(
-        "train-all is registered but will remain blocked until Kronos has a real local adapter. "
-        "Heavy jobs will run sequentially once that integration is complete."
+        "train-all remains blocked until one reproducible launch manifest can supply market and labeled-text inputs. "
+        "Use the individual training commands meanwhile; they run one heavy model at a time."
     )
 
 
