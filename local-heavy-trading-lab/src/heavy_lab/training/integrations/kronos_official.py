@@ -22,6 +22,70 @@ class KronosOfficialFiles:
     config_path: Path
 
 
+def ensure_kronos_source(
+    *,
+    vendor_root: Path,
+    run_command: Callable[..., Any] = subprocess.run,
+) -> Path:
+    vendor_root = Path(vendor_root).expanduser().resolve()
+    vendor_root.mkdir(parents=True, exist_ok=True)
+    source_root = vendor_root / f"kronos-{KRONOS_SOURCE_REVISION[:12]}"
+    marker_path = source_root / ".source.json"
+
+    if source_root.exists():
+        if not marker_path.is_file():
+            raise RuntimeError(f"Existing Kronos source is missing revision marker: {source_root}")
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        expected = {
+            "repository": KRONOS_SOURCE_REPOSITORY,
+            "revision": KRONOS_SOURCE_REVISION,
+        }
+        if marker != expected:
+            raise RuntimeError(
+                "Existing Kronos source marker does not match the pinned source: "
+                f"expected {expected}, found {marker}"
+            )
+        return source_root
+
+    run_command(
+        [
+            "git",
+            "clone",
+            "--filter=blob:none",
+            KRONOS_SOURCE_REPOSITORY,
+            str(source_root),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    run_command(
+        ["git", "-C", str(source_root), "checkout", "--detach", KRONOS_SOURCE_REVISION],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    script_path = source_root / "finetune_csv" / "train_sequential.py"
+    if not script_path.is_file():
+        raise FileNotFoundError(
+            f"Pinned Kronos source does not contain the expected training script: {script_path}"
+        )
+
+    marker_path.write_text(
+        json.dumps(
+            {
+                "repository": KRONOS_SOURCE_REPOSITORY,
+                "revision": KRONOS_SOURCE_REVISION,
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return source_root
+
+
 def _single_matching_symbol(train_frame: pd.DataFrame, validation_frame: pd.DataFrame) -> str:
     train_symbols = list(train_frame["symbol"].drop_duplicates())
     validation_symbols = list(validation_frame["symbol"].drop_duplicates())
