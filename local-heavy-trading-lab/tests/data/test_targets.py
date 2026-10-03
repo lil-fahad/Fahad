@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 
 def _frame() -> pd.DataFrame:
@@ -32,8 +33,8 @@ def test_targets_are_separate_future_returns_with_tail_nan():
         "target_return_h1",
         "target_return_h2",
     ]
-    assert targets.loc[0, "target_return_h1"] == 0.01
-    assert targets.loc[0, "target_return_h2"] == 0.02
+    assert targets.loc[0, "target_return_h1"] == pytest.approx(0.01)
+    assert targets.loc[0, "target_return_h2"] == pytest.approx(0.02)
     assert pd.isna(targets.loc[4, "target_return_h1"])
     assert pd.isna(targets.loc[3, "target_return_h2"])
     assert not any(name.startswith("target_") for name in _frame().columns)
