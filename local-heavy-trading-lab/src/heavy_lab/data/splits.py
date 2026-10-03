@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from typing import Sequence
+
+import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -67,3 +70,50 @@ def build_walk_forward_splits(
         cursor = test_end + int(embargo)
 
     return folds
+
+
+def _split_descriptor(index: Sequence, indices: tuple[int, ...]) -> dict[str, object]:
+    if not indices:
+        raise ValueError("split indices must not be empty")
+    timestamps = pd.DatetimeIndex([index[position] for position in indices])
+    if timestamps.tz is None:
+        raise ValueError("split timestamps must be timezone-aware")
+    timestamps = timestamps.tz_convert("UTC")
+    encoded = "\n".join(ts.isoformat() for ts in timestamps).encode("utf-8")
+    return {
+        "start_utc": timestamps[0].isoformat(),
+        "end_utc": timestamps[-1].isoformat(),
+        "rows": len(indices),
+        "row_hash": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
+def build_split_manifest(
+    *,
+    index: Sequence,
+    folds: Sequence[Fold],
+    horizon: int,
+    embargo: int,
+) -> dict[str, object]:
+    """Describe exact chronological fold boundaries with deterministic hashes."""
+    if horizon <= 0:
+        raise ValueError("horizon must be positive")
+    if embargo < 0:
+        raise ValueError("embargo must be non-negative")
+
+    manifest_folds: list[dict[str, object]] = []
+    for fold_number, fold in enumerate(folds):
+        manifest_folds.append(
+            {
+                "fold": fold_number,
+                "train": _split_descriptor(index, fold.train_indices),
+                "validation": _split_descriptor(index, fold.validation_indices),
+                "test": _split_descriptor(index, fold.test_indices),
+            }
+        )
+
+    return {
+        "horizon": int(horizon),
+        "embargo": int(embargo),
+        "folds": manifest_folds,
+    }
