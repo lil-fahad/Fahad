@@ -25,15 +25,15 @@ def test_campaign_runs_all_models_sequentially_and_isolates_failure(monkeypatch,
     events: list[str] = []
     fake_hardware = SimpleNamespace(cuda=True, vram_gb=8.0, device="cuda")
 
-    monkeypatch.setattr(campaign, "detect_hardware", lambda root: fake_hardware)
+    monkeypatch.setattr(campaign, "detect_hardware", lambda root: fake_hardware, raising=False)
     monkeypatch.setattr(
         campaign,
         "training_readiness",
         lambda **kwargs: {"ready": True, "missing": [], "hardware": {"cuda": True, "vram_gb": 8.0}},
     )
-    monkeypatch.setattr(campaign, "_read_market_splits", lambda train, validation: ("TRAIN", "VALIDATION"))
-    monkeypatch.setattr(campaign, "_read_jsonl", lambda path: [{"text": str(path), "label": 1}])
-    monkeypatch.setattr(campaign, "_cleanup_cuda", lambda: events.append("cleanup"))
+    monkeypatch.setattr(campaign, "_read_market_splits", lambda train, validation: ("TRAIN", "VALIDATION"), raising=False)
+    monkeypatch.setattr(campaign, "_read_jsonl", lambda path: [{"text": str(path), "label": 1}], raising=False)
+    monkeypatch.setattr(campaign, "_cleanup_cuda", lambda: events.append("cleanup"), raising=False)
 
     def ok(name):
         def runner(**kwargs):
