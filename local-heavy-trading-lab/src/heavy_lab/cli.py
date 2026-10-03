@@ -108,25 +108,133 @@ def prepare_command(
     profile: str = typer.Option("intraday-v1", "--profile"),
     dry_run: bool = typer.Option(False, "--dry-run"),
     root: Path = typer.Option(Path.cwd(), "--root"),
+    input_path: Path | None = typer.Option(
+        None,
+        "--input",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+    ),
 ) -> None:
     if profile != "intraday-v1":
         raise typer.BadParameter("Only the intraday-v1 preparation profile is currently defined")
+
+    horizon = 12
+    embargo = 12
     payload = {
         "profile": "intraday-v1",
         "dry_run": bool(dry_run),
         "horizons": [1, 6, 12],
         "normalization": "fold-local-standard",
         "timesfm_normalization": "none",
-        "split": {"horizon": 12, "embargo": 12},
+        "split": {"horizon": horizon, "embargo": embargo},
         "requires_input": True,
     }
     if dry_run:
         typer.echo(json.dumps(payload, indent=2))
         return
-    _ = root
-    raise typer.BadParameter(
-        "Preparation requires a canonical input parquet; use --dry-run to inspect the profile."
+    if input_path is None:
+        raise typer.BadParameter("Preparation requires --input with a canonical parquet file")
+
+    import pandas as pd
+    from heavy_lab.data.schema import validate_canonical_frame
+
+    paths = LabPaths.from_root(Path(root))
+    paths.ensure_runtime_dirs()
+    frame = pd.read_parquet(input_path)
+    validate_canonical_frame(frame)
+
+    timestamps = (
+        frame["timestamp_utc"]
+        .drop_duplicates()
+        .sort_values()
+        .reset_index(drop=True)
     )
+    total = len(timestamps)
+    validation_size = max(1, total // 5)
+    test_size = max(1, total // 5)
+    train_size = total - (2 * embargo) - validation_size - test_size
+    if train_size <= horizon:
+        raise typer.BadParameter(
+            "Canonical input is too short for intraday-v1 with 12-bar purge/embargo"
+        )
+
+    train_end = train_size
+    validation_start = train_end + embargo
+    validation_end = validation_start + validation_size
+    test_start = validation_end + embargo
+    test_end = test_start + test_size
+    if test_end != total:
+        raise RuntimeError("internal split accounting error")
+
+    train_ts = set(timestamps.iloc[:train_end])
+    validation_ts = set(timestamps.iloc[validation_start:validation_end])
+    test_ts = set(timestamps.iloc[test_start:test_end])
+
+    train_frame = frame[frame["timestamp_utc"].isin(train_ts)].copy()
+    validation_frame = frame[frame["timestamp_utc"].isin(validation_ts)].copy()
+    test_frame = frame[frame["timestamp_utc"].isin(test_ts)].copy()
+    for split in (train_frame, validation_frame, test_frame):
+        split.sort_values(["symbol", "timestamp_utc"], kind="stable", inplace=True)
+        split.reset_index(drop=True, inplace=True)
+        validate_canonical_frame(split)
+
+    split_dir = paths.data_splits / profile
+    split_dir.mkdir(parents=True, exist_ok=True)
+    train_path = (split_dir / "train.parquet").resolve()
+    validation_path = (split_dir / "validation.parquet").resolve()
+    test_path = (split_dir / "test.parquet").resolve()
+    manifest_path = (split_dir / "campaign.json").resolve()
+
+    train_frame.to_parquet(train_path, index=False)
+    validation_frame.to_parquet(validation_path, index=False)
+    test_frame.to_parquet(test_path, index=False)
+
+    manifest = {
+        "profile": profile,
+        "horizon": horizon,
+        "embargo": embargo,
+        "locked_test": True,
+        "train_parquet": str(train_path),
+        "validation_parquet": str(validation_path),
+        "test_parquet": str(test_path),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+
+    typer.echo(
+        json.dumps(
+            {
+                "profile": profile,
+                "train_parquet": str(train_path),
+                "validation_parquet": str(validation_path),
+                "test_parquet": str(test_path),
+                "manifest": str(manifest_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@app.command("bot")
+def bot_command(
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    manifest: Path | None = typer.Option(None, "--manifest"),
+    poll_timeout: int = typer.Option(30, "--poll-timeout", min=1, max=50),
+) -> None:
+    import os
+
+    from heavy_lab.bot.runtime import BotConfig, LocalTelegramBot
+
+    env = dict(os.environ)
+    env["HEAVY_LAB_ROOT"] = str(Path(root).expanduser().resolve())
+    env["TELEGRAM_POLL_TIMEOUT"] = str(poll_timeout)
+    if manifest is not None:
+        env["HEAVY_LAB_CAMPAIGN_MANIFEST"] = str(
+            Path(manifest).expanduser().resolve()
+        )
+    config = BotConfig.from_env(env)
+    LocalTelegramBot(config).run_forever()
 
 
 @app.command("training-ready")
