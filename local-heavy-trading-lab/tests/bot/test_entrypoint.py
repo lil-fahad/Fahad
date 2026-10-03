@@ -18,6 +18,6 @@ def test_lab_cli_exposes_bot_command_help():
 
     result = CliRunner().invoke(app, ["bot", "--help"])
     assert result.exit_code == 0, result.stdout
-    output = re.sub(r"\\x1b\\[[0-9;]*m", "", result.stdout)
+    output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
     assert "--root" in output
     assert "--manifest" in output
