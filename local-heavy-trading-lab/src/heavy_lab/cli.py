@@ -200,12 +200,21 @@ def train_finbert_command(
 
 
 @app.command("train-all")
-def train_all_command(root: Path = typer.Option(Path.cwd(), "--root")) -> None:
-    _ = root
-    raise typer.BadParameter(
-        "train-all remains blocked until one reproducible launch manifest can supply market and labeled-text inputs. "
-        "Use the individual training commands meanwhile; they run one heavy model at a time."
+def train_all_command(
+    root: Path = typer.Option(Path.cwd(), "--root"),
+    manifest: Path = typer.Option(Path("campaign.json"), "--manifest", exists=True, dir_okay=False, readable=True),
+    profile: str | None = typer.Option(None, "--profile"),
+) -> None:
+    from heavy_lab.training.campaign import run_training_campaign
+
+    if profile is not None and profile not in {"smoke", "max"}:
+        raise typer.BadParameter("--profile must be smoke or max")
+    summary = run_training_campaign(
+        root=Path(root).expanduser().resolve(),
+        manifest_path=Path(manifest).expanduser().resolve(),
+        profile=profile,
     )
+    typer.echo(json.dumps(summary, indent=2, sort_keys=False))
 
 
 if __name__ == "__main__":
