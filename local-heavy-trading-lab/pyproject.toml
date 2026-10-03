@@ -55,6 +55,7 @@ kronos-train = [
 
 [project.scripts]
 lab = "heavy_lab.cli:app"
+lab-bot = "heavy_lab.bot.runtime:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
