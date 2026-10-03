@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
+import re
 from typing import Any, Callable
 
 from heavy_lab.paths import LabPaths
@@ -16,9 +17,19 @@ class BotAction:
 
 
 @dataclass(frozen=True)
+class SignalAction:
+    side: str
+    symbol: str
+    quantity: int
+    confidence: float | None = None
+    paper_only: bool = field(default=True, init=False)
+    execute: bool = field(default=False, init=False)
+
+
+@dataclass(frozen=True)
 class BotReply:
     text: str
-    action: BotAction | None = None
+    action: BotAction | SignalAction | None = None
 
 
 class BotCommandProcessor:
@@ -101,6 +112,7 @@ class BotCommandProcessor:
                 "/runs - latest local training runs\n"
                 "/trainall [smoke|max] - request local training campaign\n"
                 "/trainstatus - local training process status\n"
+                "/signal BUY|SELL SYMBOL QTY [confidence] - send paper trade intent to private API\n"
                 "/help - this help"
             )
 
@@ -150,6 +162,45 @@ class BotCommandProcessor:
                     profile=profile,
                     manifest=self.campaign_manifest.resolve(),
                 ),
+            )
+
+        if command == "/signal":
+            if len(args) not in {3, 4}:
+                return BotReply("SIGNAL usage: /signal BUY|SELL SYMBOL QTY [confidence]")
+
+            side = args[0].strip().upper()
+            symbol = args[1].strip().upper()
+            if side not in {"BUY", "SELL"}:
+                return BotReply("Invalid SIGNAL side. Use BUY or SELL.")
+            if not re.fullmatch(r"[A-Z0-9.^_-]{1,20}", symbol):
+                return BotReply("Invalid SIGNAL symbol.")
+
+            try:
+                quantity = int(args[2])
+            except ValueError:
+                return BotReply("Invalid SIGNAL quantity.")
+            if quantity <= 0:
+                return BotReply("Invalid SIGNAL quantity.")
+
+            confidence: float | None = None
+            if len(args) == 4:
+                try:
+                    confidence = float(args[3])
+                except ValueError:
+                    return BotReply("Invalid SIGNAL confidence.")
+                if not 0.0 <= confidence <= 1.0:
+                    return BotReply("Invalid SIGNAL confidence.")
+
+            action = SignalAction(
+                side=side,
+                symbol=symbol,
+                quantity=quantity,
+                confidence=confidence,
+            )
+            confidence_text = "" if confidence is None else f" confidence={confidence:.2f}"
+            return BotReply(
+                f"SIGNAL READY: {side} {symbol} x{quantity}{confidence_text} | PAPER ONLY",
+                action,
             )
 
         if command == "/trainstatus":
