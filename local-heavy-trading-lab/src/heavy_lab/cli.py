@@ -77,6 +77,58 @@ def doctor(root: Path = typer.Option(Path.cwd(), "--root"), json_output: bool = 
     typer.echo(json.dumps(report, indent=2, sort_keys=True) if json_output else f"device={report['hardware']['device']} profile={report['training_profile']}")
 
 
+@app.command("ingest")
+def ingest_command(
+    profile: str = typer.Option("spy-spx", "--profile"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    root: Path = typer.Option(Path.cwd(), "--root"),
+) -> None:
+    if profile != "spy-spx":
+        raise typer.BadParameter("Only the spy-spx ingestion profile is currently defined")
+    payload = {
+        "profile": "spy-spx",
+        "provider": "nasdaq",
+        "symbols": ["SPY", "SPX"],
+        "interval": "5m",
+        "dry_run": bool(dry_run),
+        "requires": ["NASDAQ_CLIENT_ID", "NASDAQ_CLIENT_SECRET", "NASDAQ_BASE_URL"],
+    }
+    if dry_run:
+        typer.echo(json.dumps(payload, indent=2))
+        return
+    _ = root
+    raise typer.BadParameter(
+        "Live ingestion requires explicit date bounds and Nasdaq credentials; "
+        "use --dry-run until those inputs are supplied."
+    )
+
+
+@app.command("prepare")
+def prepare_command(
+    profile: str = typer.Option("intraday-v1", "--profile"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    root: Path = typer.Option(Path.cwd(), "--root"),
+) -> None:
+    if profile != "intraday-v1":
+        raise typer.BadParameter("Only the intraday-v1 preparation profile is currently defined")
+    payload = {
+        "profile": "intraday-v1",
+        "dry_run": bool(dry_run),
+        "horizons": [1, 6, 12],
+        "normalization": "fold-local-standard",
+        "timesfm_normalization": "none",
+        "split": {"horizon": 12, "embargo": 12},
+        "requires_input": True,
+    }
+    if dry_run:
+        typer.echo(json.dumps(payload, indent=2))
+        return
+    _ = root
+    raise typer.BadParameter(
+        "Preparation requires a canonical input parquet; use --dry-run to inspect the profile."
+    )
+
+
 @app.command("training-ready")
 def training_ready_command(
     root: Path = typer.Option(Path.cwd(), "--root"),
