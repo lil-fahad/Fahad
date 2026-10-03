@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
+from click import unstyle
 from typer.testing import CliRunner
 
 
@@ -17,5 +18,4 @@ def test_lab_cli_exposes_bot_command_help():
 
     result = CliRunner().invoke(app, ["bot", "--help"])
     assert result.exit_code == 0, result.stdout
-    assert "--root" in result.stdout
-    assert "--manifest" in result.stdout
+    output = unstyle(result.stdout)\n    assert "--root" in output\n    assert "--manifest" in output\n
