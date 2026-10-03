@@ -18,4 +18,6 @@ def test_lab_cli_exposes_bot_command_help():
 
     result = CliRunner().invoke(app, ["bot", "--help"])
     assert result.exit_code == 0, result.stdout
-    output = unstyle(result.stdout)\n    assert "--root" in output\n    assert "--manifest" in output\n
+    output = unstyle(result.stdout)
+    assert "--root" in output
+    assert "--manifest" in output
