@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
@@ -10,16 +10,19 @@ import time
 from typing import Any, Callable, Mapping
 from urllib import request as urllib_request
 
-from heavy_lab.bot.commands import BotAction, BotCommandProcessor
+from heavy_lab.bot.commands import BotAction, BotCommandProcessor, SignalAction
+from heavy_lab.bot.private_signal_api import PrivateSignalAPI
 
 
 @dataclass(frozen=True)
 class BotConfig:
-    token: str
-    owner_chat_id: int
-    root: Path
-    campaign_manifest: Path
+    token: str = field(repr=False)
+    owner_chat_id: int = 0
+    root: Path = Path.cwd()
+    campaign_manifest: Path = Path("campaign.json")
     poll_timeout: int = 30
+    signal_api_url: str = ""
+    signal_api_token: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "BotConfig":
@@ -54,6 +57,8 @@ class BotConfig:
             root=root,
             campaign_manifest=manifest,
             poll_timeout=poll_timeout,
+            signal_api_url=str(source.get("PRIVATE_SIGNAL_API_URL", "")).strip(),
+            signal_api_token=str(source.get("PRIVATE_SIGNAL_API_TOKEN", "")).strip(),
         )
 
 
@@ -189,10 +194,20 @@ class LocalTelegramBot:
         *,
         api: TelegramAPI | None = None,
         process_manager: TrainingProcessManager | None = None,
+        signal_api: Any | None = None,
     ) -> None:
         self.config = config
         self.api = api or TelegramAPI(config.token)
         self.process_manager = process_manager or TrainingProcessManager(root=config.root)
+        if signal_api is not None:
+            self.signal_api = signal_api
+        elif config.signal_api_url:
+            self.signal_api = PrivateSignalAPI(
+                config.signal_api_url,
+                token=config.signal_api_token,
+            )
+        else:
+            self.signal_api = None
         self.processor = BotCommandProcessor(
             root=config.root,
             owner_chat_id=config.owner_chat_id,
@@ -212,9 +227,24 @@ class LocalTelegramBot:
         else:
             reply = self.processor.handle(chat_id=chat_id, text=text)
             reply_text = reply.text
-            if reply.action is not None:
+            if isinstance(reply.action, BotAction):
                 launch_status = self.process_manager.launch(reply.action)
                 reply_text = f"{reply_text}\n{launch_status}"
+            elif isinstance(reply.action, SignalAction):
+                if self.signal_api is None:
+                    reply_text = f"{reply_text}\nSIGNAL API NOT CONFIGURED"
+                else:
+                    result = self.signal_api.send(
+                        side=reply.action.side,
+                        symbol=reply.action.symbol,
+                        quantity=reply.action.quantity,
+                        confidence=reply.action.confidence,
+                        idempotency_key=f"telegram-{update_id}",
+                        source="telegram-owner",
+                    )
+                    accepted = result.get("accepted", result.get("ok", True))
+                    status = "SIGNAL SENT" if accepted is not False else "SIGNAL API REJECTED"
+                    reply_text = f"{reply_text}\n{status}"
 
         self.api.send_message(chat_id, reply_text)
         return update_id + 1
