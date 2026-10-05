@@ -28,6 +28,8 @@ class FinBERTHFModelAdapter:
         torch_module: Any | None = None,
         optimizer_factory: Callable[[Any, float], Any] | None = None,
         max_length: int = 512,
+        gradient_accumulation_steps: int = 1,
+        gradient_checkpointing: bool = False,
     ) -> None:
         self.model_path = Path(model_path)
         if not self.model_path.exists() and (tokenizer is None or model is None):
@@ -43,6 +45,10 @@ class FinBERTHFModelAdapter:
         self.max_length = int(max_length)
         if self.max_length <= 0:
             raise ValueError("max_length must be positive")
+        if gradient_accumulation_steps <= 0:
+            raise ValueError("gradient_accumulation_steps must be positive")
+        self.gradient_accumulation_steps = int(gradient_accumulation_steps)
+        self._accumulation_counter = 0
 
         if tokenizer is None or model is None:
             try:
@@ -54,6 +60,10 @@ class FinBERTHFModelAdapter:
 
         self.tokenizer = tokenizer
         self.model = model.to(self.device)
+        if gradient_checkpointing:
+            enable_checkpointing = getattr(self.model, "gradient_checkpointing_enable", None)
+            if callable(enable_checkpointing):
+                enable_checkpointing()
         self._canonical_to_native = self._derive_label_mapping(self.model.config.id2label)
         self._native_columns_for_canonical = [self._canonical_to_native[index] for index in range(3)]
         self._optimizer_factory = optimizer_factory or (
@@ -89,6 +99,8 @@ class FinBERTHFModelAdapter:
         if self._optimizer is None or self._optimizer_lr != learning_rate:
             self._optimizer = self._optimizer_factory(self.model.parameters(), learning_rate)
             self._optimizer_lr = learning_rate
+            self._optimizer.zero_grad()
+            self._accumulation_counter = 0
         return self._optimizer
 
     def train_step(self, *, text: str, label: int, learning_rate: float) -> float:
@@ -99,14 +111,29 @@ class FinBERTHFModelAdapter:
 
         self.model.train()
         optimizer = self._optimizer_for(learning_rate)
-        optimizer.zero_grad()
         batch = self._tokenize(str(text))
         labels = self.torch.tensor([native_label], dtype=self.torch.long, device=self.device)
         output = self.model(**batch, labels=labels)
         loss = output.loss
-        loss.backward()
-        optimizer.step()
+        scaled_loss = (
+            loss
+            if self.gradient_accumulation_steps == 1
+            else loss / float(self.gradient_accumulation_steps)
+        )
+        scaled_loss.backward()
+        self._accumulation_counter += 1
+        if self._accumulation_counter >= self.gradient_accumulation_steps:
+            optimizer.step()
+            optimizer.zero_grad()
+            self._accumulation_counter = 0
         return float(loss.item())
+
+    def flush_gradients(self) -> None:
+        if self._accumulation_counter <= 0 or self._optimizer is None:
+            return
+        self._optimizer.step()
+        self._optimizer.zero_grad()
+        self._accumulation_counter = 0
 
     def predict_logits(self, examples) -> np.ndarray:
         texts = [str(item["text"]) for item in examples]
