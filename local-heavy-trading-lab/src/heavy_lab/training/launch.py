@@ -176,10 +176,16 @@ def run_finbert_training(*, root: Path, train_examples, validation_examples, epo
         raise ValueError("epochs and learning_rate must be positive")
     paths = LabPaths.from_root(Path(root)); paths.ensure_runtime_dirs()
     hardware = hardware or detect_hardware(paths.root)
+    policy = plan_training("finbert", hardware)
     model_path = paths.models_base / MODEL_CATALOG["finbert"].local_name
-    adapter = adapter_factory(model_path=model_path, device=hardware.device)
+    adapter = adapter_factory(
+        model_path=model_path,
+        device=hardware.device,
+        gradient_accumulation_steps=policy.gradient_accumulation_steps,
+        gradient_checkpointing=policy.gradient_checkpointing,
+    )
     registry = RunRegistry(paths.runs)
-    run = registry.start("finbert", {"epochs": epochs, "learning_rate": learning_rate, "model_path": str(model_path)})
+    run = registry.start("finbert", {"epochs": epochs, "learning_rate": learning_rate, "model_path": str(model_path), "gradient_accumulation_steps": policy.gradient_accumulation_steps, "gradient_checkpointing": policy.gradient_checkpointing})
     trainer = FinBERTTrainer(registry, model=adapter)
     plan = trainer.prepare(
         run,
