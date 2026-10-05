@@ -115,3 +115,73 @@ def test_finbert_adapter_remaps_native_labels_and_logits(tmp_path: Path):
     adapter.save_tokenizer(tmp_path / "tokenizer")
     assert calls["model_saved"] == tmp_path / "model"
     assert calls["tokenizer_saved"] == tmp_path / "tokenizer"
+
+
+def test_finbert_adapter_accumulates_and_enables_checkpointing(tmp_path: Path):
+    from heavy_lab.training.integrations.finbert_hf import FinBERTHFModelAdapter
+
+    calls = {"backward": 0, "step": 0, "zero": 0, "checkpointing": 0}
+
+    class FakeTensor:
+        def __init__(self, value):
+            self.value = value
+        def to(self, device):
+            return self
+        def item(self):
+            return float(self.value)
+        def backward(self):
+            calls["backward"] += 1
+        def __truediv__(self, value):
+            return self
+
+    class FakeTorch:
+        long = "long"
+        @staticmethod
+        def tensor(value, dtype=None, device=None):
+            return FakeTensor(value)
+
+    class FakeTokenizer:
+        def __call__(self, text, **kwargs):
+            return {"input_ids": FakeTensor([[1, 2]])}
+
+    class FakeConfig:
+        id2label = {0: "positive", 1: "negative", 2: "neutral"}
+
+    class FakeOutput:
+        loss = FakeTensor(0.5)
+
+    class FakeModel:
+        config = FakeConfig()
+        def to(self, device):
+            return self
+        def train(self):
+            return None
+        def parameters(self):
+            return []
+        def gradient_checkpointing_enable(self):
+            calls["checkpointing"] += 1
+        def __call__(self, **kwargs):
+            return FakeOutput()
+
+    class FakeOptimizer:
+        def zero_grad(self):
+            calls["zero"] += 1
+        def step(self):
+            calls["step"] += 1
+
+    adapter = FinBERTHFModelAdapter(
+        model_path=tmp_path / "finbert",
+        device="cuda",
+        tokenizer=FakeTokenizer(),
+        model=FakeModel(),
+        torch_module=FakeTorch,
+        optimizer_factory=lambda params, lr: FakeOptimizer(),
+        gradient_accumulation_steps=2,
+        gradient_checkpointing=True,
+    )
+    adapter.train_step(text="a", label=2, learning_rate=1e-5)
+    adapter.train_step(text="b", label=0, learning_rate=1e-5)
+
+    assert calls["checkpointing"] == 1
+    assert calls["backward"] == 2
+    assert calls["step"] == 1
