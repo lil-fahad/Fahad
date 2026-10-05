@@ -88,3 +88,40 @@ def test_timesfm_launcher_forces_lora_and_writes_adapter_checkpoint(tmp_path: Pa
     checkpoint = Path(result.checkpoint)
     assert (checkpoint / "checkpoint.ok").exists()
     assert (checkpoint / "adapter" / "adapter.ok").exists()
+
+
+def test_timesfm_launcher_passes_8gb_gradient_accumulation_policy(tmp_path: Path):
+    from heavy_lab.training.launch import run_timesfm_training
+
+    captured = {}
+
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.trained = False
+        def evaluate(self, examples):
+            return 0.5
+        def train_step(self, **kwargs):
+            self.trained = True
+            return 0.25
+        def flush_gradients(self):
+            pass
+        def save_adapter(self, path):
+            Path(path).mkdir(parents=True, exist_ok=True)
+
+    hardware = HardwareProfile(
+        os_name="Windows", cpu_count=16, device="cuda", cuda=True, mps=False,
+        ram_gb=32.0, vram_gb=8.0, disk_free_gb=500.0,
+        gpu_name="RTX 3070 Ti", cuda_version="12.8",
+        compute_capability="8.6", bf16=False, fp16=True,
+    )
+    preflight = MemoryProbeResult(False, 1, "8 GB VRAM", 6.0)
+
+    run_timesfm_training(
+        root=tmp_path,
+        train_frame=_bars("2026-09-01", 20),
+        validation_frame=_bars("2026-09-02", 12),
+        context_length=4, prediction_length=2, epochs=1, learning_rate=1e-4,
+        hardware=hardware, preflight=preflight, adapter_factory=FakeAdapter,
+    )
+    assert captured["gradient_accumulation_steps"] == 16
