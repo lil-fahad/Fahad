@@ -73,6 +73,9 @@ class TimesFM25Trainer(TrainerAdapter):
                         use_lora=bool(plan.config["use_lora"]),
                     )
                 )
+            flush = getattr(self.model, "flush_gradients", None)
+            if callable(flush):
+                flush()
 
         finetuned_loss = float(self.model.evaluate(validation))
         plan.checkpoint_dir.mkdir(parents=True, exist_ok=True)
