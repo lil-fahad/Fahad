@@ -9,6 +9,8 @@ param(
     [string]$FinBERTValidationJsonl,
     [ValidateSet("smoke", "max")]
     [string]$Profile = "smoke",
+    [switch]$Bootstrap,
+    [switch]$DownloadModels,
     [string]$Root = (Get-Location).Path
 )
 
@@ -16,9 +18,33 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path $Root).Path
 Set-Location $Root
 
+$Installer = Join-Path $Root "scripts\install_windows.ps1"
+if ($Bootstrap) {
+    if (-not (Test-Path $Installer)) {
+        throw "Windows installer not found: $Installer"
+    }
+    Write-Host "Bootstrapping local heavy-training environment..."
+    if ($DownloadModels) {
+        & $Installer -Root $Root -Training -DownloadModels
+    } else {
+        & $Installer -Root $Root -Training
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Training bootstrap failed."
+    }
+}
+
 $Py = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $Py)) {
-    throw "Training environment not found. Run .\scripts\install_windows.ps1 -Training -DownloadModels first."
+    throw "Training environment not found. Run with -Bootstrap, or run .\scripts\install_windows.ps1 -Training first."
+}
+
+if ($DownloadModels -and -not $Bootstrap) {
+    Write-Host "Downloading/verifying all local model snapshots..."
+    & $Py -m heavy_lab.cli download-models --all --root $Root
+    if ($LASTEXITCODE -ne 0) {
+        throw "Model download failed."
+    }
 }
 
 $TrainParquet = (Resolve-Path $TrainParquet).Path
