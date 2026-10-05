@@ -59,3 +59,39 @@ def test_timesfm_uses_raw_past_future_and_forces_lora_when_full_is_unsafe(tmp_pa
     assert result.metrics["finetuned_loss"] < result.metrics["baseline_loss"]
     assert Path(result.checkpoint, "adapter", "adapter.txt").is_file()
     assert Path(result.checkpoint, "checkpoint.ok").is_file()
+
+
+def test_timesfm_trainer_flushes_partial_gradients_each_epoch(tmp_path: Path):
+    from heavy_lab.runs import RunRegistry
+    from heavy_lab.training.base import MemoryProbeResult
+    from heavy_lab.training.timesfm25 import TimesFM25Trainer
+
+    class TinyTimesFM:
+        def __init__(self):
+            self.flushes = 0
+        def train_step(self, **kwargs):
+            return 0.25
+        def flush_gradients(self):
+            self.flushes += 1
+        def evaluate(self, examples):
+            return 0.5
+        def save_adapter(self, path):
+            Path(path).mkdir(parents=True, exist_ok=True)
+
+    model = TinyTimesFM()
+    registry = RunRegistry(tmp_path / "runs")
+    run = registry.start("timesfm25", {"profile": "smoke"})
+    trainer = TimesFM25Trainer(registry, model=model)
+    examples = [{"past_values": [1.0, 2.0], "future_values": [3.0]}]
+    preflight = MemoryProbeResult(False, 1, "low vram", None)
+    plan = trainer.prepare(
+        run,
+        dataset={"train": examples, "validation": examples},
+        hardware={"device": "cuda", "vram_gb": 8.0},
+        preflight=preflight,
+        output_root=tmp_path / "trained",
+        epochs=2,
+        learning_rate=1e-4,
+    )
+    trainer.train(plan)
+    assert model.flushes == 2
