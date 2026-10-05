@@ -43,6 +43,12 @@ class TTMHFModelAdapter:
         self.trainer_factory = trainer_factory
         self.training_args_factory = training_args_factory
 
+        backbone = getattr(self.model, "backbone", None)
+        parameters = getattr(backbone, "parameters", None)
+        if callable(parameters):
+            for parameter in parameters():
+                parameter.requires_grad = False
+
     def _load_upstream(self, existing_model: Any | None):
         try:
             from transformers import Trainer, TrainingArguments
