@@ -27,6 +27,7 @@ class TimesFMHFModelAdapter:
         lora_r: int = 4,
         lora_alpha: int = 8,
         lora_dropout: float = 0.05,
+        gradient_accumulation_steps: int = 1,
     ) -> None:
         if precision not in {"fp32", "fp16", "bf16"}:
             raise ValueError("precision must be fp32, fp16, or bf16")
@@ -34,6 +35,8 @@ class TimesFMHFModelAdapter:
             raise ValueError("LoRA rank and alpha must be positive")
         if not 0.0 <= lora_dropout < 1.0:
             raise ValueError("lora_dropout must be in [0, 1)")
+        if gradient_accumulation_steps <= 0:
+            raise ValueError("gradient_accumulation_steps must be positive")
 
         self.model_path = Path(model_path)
         self.device = str(device)
@@ -41,6 +44,8 @@ class TimesFMHFModelAdapter:
         self.lora_r = int(lora_r)
         self.lora_alpha = int(lora_alpha)
         self.lora_dropout = float(lora_dropout)
+        self.gradient_accumulation_steps = int(gradient_accumulation_steps)
+        self._accumulation_counter = 0
         self._lora_applied = False
         self._optimizer = None
         self._optimizer_lr: float | None = None
@@ -174,10 +179,14 @@ class TimesFMHFModelAdapter:
         loss = getattr(output, "loss", None)
         if loss is None:
             raise RuntimeError("TimesFM forward pass did not return loss")
-        loss.backward()
-        self.clip_grad_norm(self.model.parameters(), 1.0)
-        optimizer.step()
-        optimizer.zero_grad()
+        scaled_loss = loss / float(self.gradient_accumulation_steps)
+        scaled_loss.backward()
+        self._accumulation_counter += 1
+        if self._accumulation_counter >= self.gradient_accumulation_steps:
+            self.clip_grad_norm(self.model.parameters(), 1.0)
+            optimizer.step()
+            optimizer.zero_grad()
+            self._accumulation_counter = 0
         return float(loss.item())
 
     def evaluate(self, examples: Any) -> float:
