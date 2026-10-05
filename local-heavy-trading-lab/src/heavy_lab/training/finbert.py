@@ -100,6 +100,9 @@ class FinBERTTrainer(TrainerAdapter):
                         learning_rate=float(plan.config["learning_rate"]),
                     )
                 )
+            flush = getattr(self.model, "flush_gradients", None)
+            if callable(flush):
+                flush()
 
         finetuned_logits = np.asarray(self.model.predict_logits(validation), dtype=float)
         finetuned_nll = negative_log_likelihood(finetuned_logits, labels)
