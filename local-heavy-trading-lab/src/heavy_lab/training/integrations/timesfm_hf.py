@@ -179,7 +179,11 @@ class TimesFMHFModelAdapter:
         loss = getattr(output, "loss", None)
         if loss is None:
             raise RuntimeError("TimesFM forward pass did not return loss")
-        scaled_loss = loss / float(self.gradient_accumulation_steps)
+        scaled_loss = (
+            loss
+            if self.gradient_accumulation_steps == 1
+            else loss / float(self.gradient_accumulation_steps)
+        )
         scaled_loss.backward()
         self._accumulation_counter += 1
         if self._accumulation_counter >= self.gradient_accumulation_steps:
