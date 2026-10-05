@@ -71,9 +71,9 @@ def run_chronos2_training(*, root: Path, train_frame: pd.DataFrame, validation_f
     if not train_windows or not validation_windows: raise ValueError("Chronos-2 splits need more chronological rows")
     model_path = paths.models_base / MODEL_CATALOG["chronos2"].local_name
     pipeline = pipeline_loader(model_path=model_path, device=hardware.device, precision=policy.precision)
-    registry = RunRegistry(paths.runs); run = registry.start("chronos2", {"context_length": context_length, "prediction_length": prediction_length, "steps": steps, "learning_rate": learning_rate, "model_path": str(model_path), "finetune_mode": "full" if preflight.safe_full_finetune else "lora", "preflight_reason": preflight.reason})
+    registry = RunRegistry(paths.runs); run = registry.start("chronos2", {"context_length": context_length, "prediction_length": prediction_length, "steps": steps, "learning_rate": learning_rate, "model_path": str(model_path), "finetune_mode": "full" if preflight.safe_full_finetune else "lora", "preflight_reason": preflight.reason, "gradient_accumulation_steps": policy.gradient_accumulation_steps})
     trainer = Chronos2Trainer(registry, model=pipeline)
-    return trainer.train(trainer.prepare(run, {"train": train_windows, "validation": validation_windows}, hardware.as_dict(), preflight=preflight, output_root=paths.checkpoints, epochs=steps, learning_rate=learning_rate))
+    return trainer.train(trainer.prepare(run, {"train": train_windows, "validation": validation_windows}, hardware.as_dict(), preflight=preflight, output_root=paths.checkpoints, epochs=steps, learning_rate=learning_rate, gradient_accumulation_steps=policy.gradient_accumulation_steps))
 
 
 def run_kronos_training(
