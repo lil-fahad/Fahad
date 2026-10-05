@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 from pathlib import Path
 from typing import Any, Callable
 
@@ -178,12 +180,26 @@ def run_finbert_training(*, root: Path, train_examples, validation_examples, epo
     hardware = hardware or detect_hardware(paths.root)
     policy = plan_training("finbert", hardware)
     model_path = paths.models_base / MODEL_CATALOG["finbert"].local_name
-    adapter = adapter_factory(
-        model_path=model_path,
-        device=hardware.device,
-        gradient_accumulation_steps=policy.gradient_accumulation_steps,
-        gradient_checkpointing=policy.gradient_checkpointing,
-    )
+    adapter_kwargs = {
+        "model_path": model_path,
+        "device": hardware.device,
+        "gradient_accumulation_steps": policy.gradient_accumulation_steps,
+        "gradient_checkpointing": policy.gradient_checkpointing,
+    }
+    try:
+        signature = inspect.signature(adapter_factory)
+        accepts_extra = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in signature.parameters.values()
+        )
+        if not accepts_extra:
+            adapter_kwargs = {
+                key: value for key, value in adapter_kwargs.items()
+                if key in signature.parameters
+            }
+    except (TypeError, ValueError):
+        pass
+    adapter = adapter_factory(**adapter_kwargs)
     registry = RunRegistry(paths.runs)
     run = registry.start("finbert", {"epochs": epochs, "learning_rate": learning_rate, "model_path": str(model_path), "gradient_accumulation_steps": policy.gradient_accumulation_steps, "gradient_checkpointing": policy.gradient_checkpointing})
     trainer = FinBERTTrainer(registry, model=adapter)
