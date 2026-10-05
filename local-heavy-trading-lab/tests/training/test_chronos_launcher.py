@@ -81,4 +81,5 @@ def test_chronos_launcher_loads_local_snapshot_and_uses_lora_on_8gb(tmp_path: Pa
     assert loaded["device"] == "cuda"
     assert loaded["model_path"].name == "chronos-2"
     assert calls and calls[0]["finetune_mode"] == "lora"
+    assert calls[0]["gradient_accumulation_steps"] == 8
     assert Path(result.checkpoint, "model", "chronos.ok").is_file()
