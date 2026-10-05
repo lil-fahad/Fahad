@@ -92,3 +92,60 @@ class _NullContext:
 
     def __exit__(self, exc_type, exc, tb):
         return False
+
+
+def test_timesfm_hf_adapter_accumulates_gradients_before_optimizer_step(tmp_path: Path):
+    from heavy_lab.training.integrations.timesfm_hf import TimesFMHFModelAdapter
+
+    calls = {"backward": 0, "step": 0, "zero": 0}
+
+    class FakeLoss:
+        def backward(self):
+            calls["backward"] += 1
+        def item(self):
+            return 0.25
+        def __truediv__(self, value):
+            return self
+
+    class FakeOutput:
+        loss = FakeLoss()
+
+    class FakeModel:
+        def train(self):
+            return self
+        def __call__(self, **kwargs):
+            return FakeOutput()
+        def parameters(self):
+            return []
+
+    class FakeOptimizer:
+        param_groups = [{"lr": 1e-4}]
+        def step(self):
+            calls["step"] += 1
+        def zero_grad(self):
+            calls["zero"] += 1
+
+    adapter = TimesFMHFModelAdapter(
+        model_path=tmp_path / "timesfm-2.5",
+        device="cuda",
+        precision="fp16",
+        model=FakeModel(),
+        tensor_factory=lambda values, **kwargs: [list(values)],
+        optimizer_factory=lambda params, lr: FakeOptimizer(),
+        lora_factory=lambda model, **kwargs: model,
+        clip_grad_norm=lambda params, max_norm: None,
+        no_grad_context=lambda: _NullContext(),
+        gradient_accumulation_steps=2,
+    )
+
+    for _ in range(2):
+        adapter.train_step(
+            past_values=[1.0, 2.0],
+            future_values=[3.0],
+            learning_rate=1e-4,
+            use_lora=True,
+        )
+
+    assert calls["backward"] == 2
+    assert calls["step"] == 1
+    assert calls["zero"] == 1
