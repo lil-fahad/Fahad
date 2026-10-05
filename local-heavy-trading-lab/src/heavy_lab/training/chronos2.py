@@ -24,6 +24,7 @@ class Chronos2Trainer(TrainerAdapter):
         output_root: Path,
         epochs: int = 1,
         learning_rate: float = 1e-4,
+        gradient_accumulation_steps: int = 1,
     ) -> TrainPlan:
         if "train" not in dataset or "validation" not in dataset:
             raise ValueError("Chronos-2 dataset must contain train and validation splits")
@@ -31,6 +32,8 @@ class Chronos2Trainer(TrainerAdapter):
             raise ValueError("epochs must be positive")
         if learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
+        if gradient_accumulation_steps <= 0:
+            raise ValueError("gradient_accumulation_steps must be positive")
         if preflight.max_micro_batch_size <= 0:
             raise RuntimeError(f"Chronos-2 memory preflight rejected training: {preflight.reason}")
 
@@ -48,6 +51,7 @@ class Chronos2Trainer(TrainerAdapter):
                 "micro_batch_size": int(preflight.max_micro_batch_size),
                 "preflight_reason": preflight.reason,
                 "finetune_mode": "full" if preflight.safe_full_finetune else "lora",
+                "gradient_accumulation_steps": int(gradient_accumulation_steps),
             },
             checkpoint_dir=Path(output_root) / run.run_id / "checkpoint",
         )
@@ -91,6 +95,7 @@ class Chronos2Trainer(TrainerAdapter):
             learning_rate=float(plan.config["learning_rate"]),
             num_steps=int(plan.config["num_steps"]),
             batch_size=int(plan.config["micro_batch_size"]),
+            gradient_accumulation_steps=int(plan.config["gradient_accumulation_steps"]),
             output_dir=trainer_output,
             finetuned_ckpt_name="native-fit",
         )
