@@ -39,3 +39,38 @@ def test_ttm_hf_adapter_uses_trainer_for_real_evaluate_and_train(tmp_path: Path)
     adapter.save_pretrained(tmp_path / "saved")
 
     assert calls == {"train": 1, "evaluate": 1, "saved": tmp_path / "saved"}
+
+
+def test_ttm_hf_adapter_freezes_backbone_for_target_finetune(tmp_path: Path):
+    from heavy_lab.training.integrations.ttm_hf import TTMHFModelAdapter
+
+    class Param:
+        def __init__(self):
+            self.requires_grad = True
+
+    class Backbone:
+        def __init__(self):
+            self._params = [Param(), Param()]
+        def parameters(self):
+            return self._params
+
+    class FakeModel:
+        def __init__(self):
+            self.backbone = Backbone()
+            self.head = Param()
+        def save_pretrained(self, path):
+            pass
+
+    model = FakeModel()
+    TTMHFModelAdapter(
+        model_path=tmp_path / "ttm-r2",
+        output_root=tmp_path / "trainer",
+        model=model,
+        trainer_factory=lambda **kwargs: None,
+        training_args_factory=lambda **kwargs: kwargs,
+        batch_size=1,
+        precision="fp32",
+    )
+
+    assert all(not p.requires_grad for p in model.backbone.parameters())
+    assert model.head.requires_grad is True
