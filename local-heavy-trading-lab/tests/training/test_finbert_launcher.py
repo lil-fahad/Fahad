@@ -79,3 +79,42 @@ def test_finbert_launcher_uses_local_snapshot_and_real_trainer_contract(tmp_path
     assert Path(result.checkpoint, "model", "model.ok").is_file()
     assert Path(result.checkpoint, "tokenizer", "tokenizer.ok").is_file()
     assert Path(result.checkpoint, "calibration.json").is_file()
+
+
+def test_finbert_launcher_wires_8gb_training_policy(tmp_path: Path):
+    from heavy_lab.training.launch import run_finbert_training
+
+    captured = {}
+
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+        def train_step(self, **kwargs):
+            return 0.2
+        def flush_gradients(self):
+            pass
+        def predict_logits(self, examples):
+            return np.asarray([[1.0, 2.0, 3.0] for _ in examples], dtype=float)
+        def save_pretrained(self, path):
+            Path(path).mkdir(parents=True, exist_ok=True)
+        def save_tokenizer(self, path):
+            Path(path).mkdir(parents=True, exist_ok=True)
+
+    train = [
+        {"document_id": "a", "timestamp_utc": "2026-01-01T10:00:00Z", "text": "profits rose", "label": 2},
+    ]
+    validation = [
+        {"document_id": "b", "timestamp_utc": "2026-01-02T10:00:00Z", "text": "outlook stable", "label": 1},
+    ]
+    hardware = HardwareProfile(
+        os_name="Windows", cpu_count=16, device="cuda", cuda=True, mps=False,
+        ram_gb=32.0, vram_gb=8.0, disk_free_gb=500.0,
+        gpu_name="RTX 3070 Ti", cuda_version="12.8",
+        compute_capability="8.6", bf16=False, fp16=True,
+    )
+    run_finbert_training(
+        root=tmp_path, train_examples=train, validation_examples=validation,
+        epochs=1, learning_rate=1e-5, hardware=hardware, adapter_factory=FakeAdapter,
+    )
+    assert captured["gradient_accumulation_steps"] == 4
+    assert captured["gradient_checkpointing"] is True
