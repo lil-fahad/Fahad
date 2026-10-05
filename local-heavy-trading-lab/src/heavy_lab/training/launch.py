@@ -50,8 +50,13 @@ def run_timesfm_training(*, root: Path, train_frame: pd.DataFrame, validation_fr
     validation_examples = build_timesfm_examples(validation_frame, context_length=context_length, prediction_length=prediction_length)
     if not train_examples or not validation_examples: raise ValueError("TimesFM splits need more chronological rows")
     model_path = paths.models_base / MODEL_CATALOG["timesfm25"].local_name
-    adapter = adapter_factory(model_path=model_path, device=hardware.device, precision=policy.precision)
-    registry = RunRegistry(paths.runs); run = registry.start("timesfm25", {"context_length": context_length, "prediction_length": prediction_length, "epochs": epochs, "learning_rate": learning_rate, "model_path": str(model_path), "finetune_mode": "full" if preflight.safe_full_finetune else "lora", "preflight_reason": preflight.reason})
+    adapter = adapter_factory(
+        model_path=model_path,
+        device=hardware.device,
+        precision=policy.precision,
+        gradient_accumulation_steps=policy.gradient_accumulation_steps,
+    )
+    registry = RunRegistry(paths.runs); run = registry.start("timesfm25", {"context_length": context_length, "prediction_length": prediction_length, "epochs": epochs, "learning_rate": learning_rate, "model_path": str(model_path), "finetune_mode": "full" if preflight.safe_full_finetune else "lora", "preflight_reason": preflight.reason, "gradient_accumulation_steps": policy.gradient_accumulation_steps})
     trainer = TimesFM25Trainer(registry, model=adapter)
     return trainer.train(trainer.prepare(run, {"train": train_examples, "validation": validation_examples}, hardware.as_dict(), preflight=preflight, output_root=paths.checkpoints, epochs=epochs, learning_rate=learning_rate))
 
