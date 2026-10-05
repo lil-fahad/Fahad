@@ -193,6 +193,14 @@ class TimesFMHFModelAdapter:
             self._accumulation_counter = 0
         return float(loss.item())
 
+    def flush_gradients(self) -> None:
+        if self._accumulation_counter <= 0 or self._optimizer is None:
+            return
+        self.clip_grad_norm(self.model.parameters(), 1.0)
+        self._optimizer.step()
+        self._optimizer.zero_grad()
+        self._accumulation_counter = 0
+
     def evaluate(self, examples: Any) -> float:
         if not examples:
             raise ValueError("TimesFM evaluation examples are empty")
