@@ -50,8 +50,11 @@ def test_training_readiness_accepts_complete_3070ti_setup(tmp_path: Path):
     for spec in MODEL_CATALOG.values():
         target = tmp_path / "models" / "base" / spec.local_name
         target.mkdir(parents=True)
+        (target / "model.safetensors").write_bytes(b"test-weights")
         (target / "manifest.json").write_text(
-            json.dumps({"name": spec.name, "resolved_revision": "fixture"}),
+            json.dumps({"name": spec.name, "resolved_revision": "fixture",
+                        "files": [{"path": "model.safetensors", "size_bytes": 12}],
+                        "total_bytes": 12}),
             encoding="utf-8",
         )
 
