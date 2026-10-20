@@ -73,3 +73,39 @@ def write_manifest_atomic(manifest: ModelManifest) -> Path:
     tmp.write_text(json.dumps(manifest.as_dict(), indent=2, sort_keys=True), encoding="utf-8")
     os.replace(tmp, target)
     return target
+
+
+def validate_local_model_manifest(root: Path, expected_name: str) -> bool:
+    """Validate a downloaded model inventory without trusting manifest paths."""
+    try:
+        root = Path(root).resolve(strict=True)
+        payload = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("name") != expected_name:
+            return False
+        if not str(payload.get("resolved_revision", "")).strip():
+            return False
+        files = payload.get("files")
+        if not isinstance(files, list) or not files:
+            return False
+        total = 0
+        seen = set()
+        for item in files:
+            if not isinstance(item, dict):
+                return False
+            relative = item.get("path")
+            size = item.get("size_bytes")
+            if not isinstance(relative, str) or not relative or not isinstance(size, int) or size < 0:
+                return False
+            path = Path(relative)
+            if path.is_absolute() or relative in seen:
+                return False
+            seen.add(relative)
+            candidate = (root / path).resolve()
+            if not candidate.is_relative_to(root) or not candidate.is_file():
+                return False
+            if candidate.stat().st_size != size:
+                return False
+            total += size
+        return payload.get("total_bytes") == total
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
