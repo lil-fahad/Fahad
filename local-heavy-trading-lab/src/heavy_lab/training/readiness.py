@@ -10,6 +10,7 @@ import pandas as pd
 from heavy_lab.data.schema import validate_canonical_frame
 from heavy_lab.hardware import HardwareProfile, detect_hardware
 from heavy_lab.models.catalog import MODEL_CATALOG
+from heavy_lab.models.manifest import validate_local_model_manifest
 from heavy_lab.paths import LabPaths
 from heavy_lab.training.policy import plan_training
 
@@ -68,7 +69,7 @@ def training_readiness(
     model_status: dict[str, bool] = {}
     for name, spec in MODEL_CATALOG.items():
         model_root = paths.models_base / spec.local_name
-        ready = model_root.is_dir() and (model_root / "manifest.json").is_file()
+        ready = validate_local_model_manifest(model_root, name)
         model_status[name] = ready
         if not ready:
             missing.append(f"model:{name}")
